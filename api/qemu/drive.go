@@ -82,13 +82,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 					rootPath = pair[1]
 				}
 				if pair[0] == "Backing Filesystem" {
-					if strings.Contains(pair[1], "ext") {
-						fstype = "ext4"
-					} else if strings.Contains(pair[1], "xfs") {
-						fstype = "xfs"
-					} else {
-						fstype = "dir"
-					}
+					fstype = "dir"
 					break
 				}
 			}
