@@ -34,7 +34,7 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		v.Set("value", podName)
 	} else {
 		v.Set("type", "container")
-		v.Set("container", podName)
+		v.Set("value", podName)
 	}
 	v.Set("command", command)
 
