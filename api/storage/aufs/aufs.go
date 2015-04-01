@@ -49,6 +49,9 @@ func MountContainerToSharedDir(containerId, rootDir, sharedDir, mountLabel strin
 	if err != nil {
 		return "", err
 	}
+	if err = os.MkdirAll(mountPoint, 0755); err != nil {
+		return "", err
+	}
 
 	if err := aufsMount(layers, path.Join(diffPath, containerId), mountPoint, mountLabel); err != nil {
 		return "", fmt.Errorf("DVM ERROR: error creating aufs mount to %s: %v", mountPoint, err)
@@ -231,8 +234,9 @@ func useDirperm() bool {
 }
 
 func aufsUnmount(target string) error {
+	glog.V(1).Infof("Ready to unmount the target : %s", target)
     if err := exec.Command("auplink", target, "flush").Run(); err != nil {
-        glog.Errorf("Couldn't run auplink before unmount: %s", err.Error())
+        glog.Errorf("Couldn't run auplink command : %s", err.Error())
     }
     if err := syscall.Unmount(target, 0); err != nil {
         return err
