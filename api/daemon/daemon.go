@@ -1,0 +1,90 @@
+package daemon
+
+import (
+	"fmt"
+	"os"
+	"runtime"
+	apiserver "dvm/api/server"
+	"dvm/engine"
+	"dvm/lib/portallocator"
+)
+
+type Daemon struct {
+	ID               string
+	eng              *engine.Engine
+}
+
+// Install installs daemon capabilities to eng.
+func (daemon *Daemon) Install(eng *engine.Engine) error {
+	// Now, we just install a command 'info' to set/get the information of the docker and DVM daemon
+	for name, method := range map[string]engine.Handler{
+		"info":              daemon.CmdInfo,
+		"serveapi":			 apiserver.ServeApi,
+		"acceptconnections": apiserver.AcceptConnections,
+	} {
+		if err := eng.Register(name, method); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func NewDaemon(eng *engine.Engine) (*Daemon, error) {
+	daemon, err := NewDaemonFromDirectory(eng)
+	if err != nil {
+		return nil, err
+	}
+	return daemon, nil
+}
+
+func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
+	// register portallocator release on shutdown
+	eng.OnShutdown(func() {
+		if err := portallocator.ReleaseAll(); err != nil {
+			fmt.Printf("portallocator.ReleaseAll(): %s", err)
+		}
+	})
+	// Check that the system is supported and we have sufficient privileges
+	if runtime.GOOS != "linux" {
+		return nil, fmt.Errorf("The Docker daemon is only supported on linux")
+	}
+	if os.Geteuid() != 0 {
+		return nil, fmt.Errorf("The Docker daemon needs to be run as root")
+	}
+	if err := checkKernel(); err != nil {
+		return nil, err
+	}
+
+	os.Setenv("TMPDIR", "/var/tmp/dvm/")
+
+	// get the canonical path to the Docker root directory
+	var realRoot string
+	realRoot = "/var/run/dvm/"
+	// Create the root directory if it doesn't exists
+	if err := os.MkdirAll(realRoot, 0700); err != nil && !os.IsExist(err) {
+		return nil, err
+	}
+
+	daemon := &Daemon{
+		ID:               "1024",
+		eng:              eng,
+	}
+
+	eng.OnShutdown(func() {
+		if err := daemon.shutdown(); err != nil {
+			fmt.Printf("Error during daemon.shutdown(): %v", err)
+		}
+	})
+
+	return daemon, nil
+}
+
+func (daemon *Daemon) shutdown() error {
+	fmt.Printf("The daemon will be shutdown\n")
+	return nil
+}
+
+// Now, the daemon can be ran for any linux kernel
+func checkKernel() error {
+	return nil
+}

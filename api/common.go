@@ -6,6 +6,10 @@ import (
 	"strings"
 )
 
+const (
+	APIVERSION = "0.0.1"
+)
+
 func FormGroup(key string, start, last int) string {
 	var (
 		group     string

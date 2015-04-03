@@ -1,4 +1,4 @@
-package dvmversion 
+package dvmversion
 
 var (
 	GITCOMMIT string = "0"

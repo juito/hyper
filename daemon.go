@@ -2,13 +2,11 @@ package main
 
 import (
 	"fmt"
-	"io"
-	"os"
-	"path/filepath"
 	"strings"
 
-	"dvm/dvmversion"
 	"dvm/api/daemon"
+	"dvm/engine"
+	"dvm/dvmversion"
 )
 
 func main() {
@@ -16,34 +14,28 @@ func main() {
 }
 
 func mainDaemon() {
-	if flag.NArg() != 0 {
-		fmt.Printf("Please specify your arguments!\n")
-		return
-	}
-
+	eng := engine.New()
 	// load the daemon in the background so we can immediately start
 	// the http api so that connections don't fail while the daemon
 	// is booting
 	daemonInitWait := make(chan error)
 	go func() {
-		d, err := daemon.NewDaemon(daemonCfg, eng)
+		d, err := daemon.NewDaemon(eng)
 		if err != nil {
 			daemonInitWait <- err
 			return
 		}
 
 		fmt.Printf("DVM daemon: %s %s",
-			dockerversion.VERSION,
-			dockerversion.GITCOMMIT,
+			dvmversion.VERSION,
+			dvmversion.GITCOMMIT,
 		)
 
+		// Install the accepted jobs
 		if err := d.Install(eng); err != nil {
 			daemonInitWait <- err
 			return
 		}
-
-		b := &builder.BuilderJob{eng, d}
-		b.Install()
 
 		// after the daemon is done setting up we can tell the api to start
 		// accepting connections
@@ -54,7 +46,9 @@ func mainDaemon() {
 		daemonInitWait <- nil
 	}()
 
-	job := eng.Job("serveapi", flHosts...)
+	defaulthost := "unix://var/run/dvm.sock"
+
+	job := eng.Job("serveapi", defaulthost)
 
 	// The serve API job never exits unless an error occurs
 	// We need to start it as a goroutine and wait on it so
@@ -62,7 +56,7 @@ func mainDaemon() {
 	serveAPIWait := make(chan error)
 	go func() {
 		if err := job.Run(); err != nil {
-			log.Errorf("ServeAPI error: %v", err)
+			fmt.Printf("ServeAPI error: %v", err)
 			serveAPIWait <- err
 			return
 		}
@@ -82,9 +76,9 @@ func mainDaemon() {
 		}
 		// we must "fatal" exit here as the API server may be happy to
 		// continue listening forever if the error had no impact to API
-		log.Fatal(outStr)
+		fmt.Printf(outStr)
 	} else {
-		log.Info("Daemon has completed initialization")
+		fmt.Printf("Daemon has completed initialization")
 	}
 
 	// Daemon is fully initialized and handling API traffic
@@ -94,7 +88,6 @@ func mainDaemon() {
 	// exited the daemon process above)
 	eng.Shutdown()
 	if errAPI != nil {
-		log.Fatalf("Shutting down due to ServeAPI error: %v", errAPI)
+		fmt.Printf("Shutting down due to ServeAPI error: %v", errAPI)
 	}
-
 }
