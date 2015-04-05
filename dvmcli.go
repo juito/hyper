@@ -17,7 +17,8 @@ func main() {
 
 	var (
 		proto	= "unix"
-		addr	= "/var/run/docker.sock"
+		//addr	= "/var/run/docker.sock"
+		addr = "/var/run/dvm.sock"
 	)
 	cli := client.NewDvmClient(proto, addr, nil)
 
