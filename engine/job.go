@@ -74,18 +74,18 @@ func (job *Job) Run() (err error) {
 	}
 	// Log beginning and end of the job
 	if job.Eng.Logging {
-		fmt.Printf("+job %s", job.CallString())
+		fmt.Printf("+job %s\n", job.CallString())
 		defer func() {
 			okerr := "OK"
 			if err != nil {
 				okerr = fmt.Sprintf("ERR: %s", err)
 			}
-			fmt.Printf("-job %s %s", job.CallString(), okerr)
+			fmt.Printf("-job %s %s\n", job.CallString(), okerr)
 		}()
 	}
 
 	if job.handler == nil {
-		return fmt.Errorf("%s: command not found", job.Name)
+		return fmt.Errorf("%s: command not found\n", job.Name)
 	}
 
 	var errorMessage = bytes.NewBuffer(nil)

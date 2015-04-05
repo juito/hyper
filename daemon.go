@@ -15,38 +15,30 @@ func main() {
 
 func mainDaemon() {
 	eng := engine.New()
-	// load the daemon in the background so we can immediately start
-	// the http api so that connections don't fail while the daemon
-	// is booting
-	daemonInitWait := make(chan error)
-	go func() {
-		d, err := daemon.NewDaemon(eng)
-		if err != nil {
-			daemonInitWait <- err
-			return
-		}
+	d, err := daemon.NewDaemon(eng)
+	if err != nil {
+		fmt.Printf("ERROR: the daemin create failed!\n")
+		return
+	}
 
-		fmt.Printf("DVM daemon: %s %s",
-			dvmversion.VERSION,
-			dvmversion.GITCOMMIT,
-		)
+	// Install the accepted jobs
+	if err := d.Install(eng); err != nil {
+		fmt.Printf("ERROR: the daemin install failed!\n")
+		return
+	}
 
-		// Install the accepted jobs
-		if err := d.Install(eng); err != nil {
-			daemonInitWait <- err
-			return
-		}
+	fmt.Printf("DVM daemon: %s %s\n",
+		dvmversion.VERSION,
+		dvmversion.GITCOMMIT,
+	)
 
-		// after the daemon is done setting up we can tell the api to start
-		// accepting connections
-		if err := eng.Job("acceptconnections").Run(); err != nil {
-			daemonInitWait <- err
-			return
-		}
-		daemonInitWait <- nil
-	}()
-
-	defaulthost := "unix://var/run/dvm.sock"
+	// after the daemon is done setting up we can tell the api to start
+	// accepting connections
+	if err := eng.Job("acceptconnections").Run(); err != nil {
+		fmt.Printf("ERROR: the acceptconnections job run failed!\n")
+		return
+	}
+	defaulthost := "unix:///var/run/dvm.sock"
 
 	job := eng.Job("serveapi", defaulthost)
 
@@ -56,7 +48,7 @@ func mainDaemon() {
 	serveAPIWait := make(chan error)
 	go func() {
 		if err := job.Run(); err != nil {
-			fmt.Printf("ServeAPI error: %v", err)
+			fmt.Printf("ServeAPI error: %v\n", err)
 			serveAPIWait <- err
 			return
 		}
@@ -72,13 +64,13 @@ func mainDaemon() {
 		if strings.Contains(errDaemon.Error(), "engine is shutdown") {
 			// if the error is "engine is shutdown", we've already reported (or
 			// will report below in API server errors) the error
-			outStr = "Shutting down daemon due to reported errors"
+			outStr = "Shutting down daemon due to reported errors\n"
 		}
 		// we must "fatal" exit here as the API server may be happy to
 		// continue listening forever if the error had no impact to API
 		fmt.Printf(outStr)
 	} else {
-		fmt.Printf("Daemon has completed initialization")
+		fmt.Printf("Daemon has completed initialization\n")
 	}
 
 	// Daemon is fully initialized and handling API traffic
@@ -88,6 +80,6 @@ func mainDaemon() {
 	// exited the daemon process above)
 	eng.Shutdown()
 	if errAPI != nil {
-		fmt.Printf("Shutting down due to ServeAPI error: %v", errAPI)
+		fmt.Printf("Shutting down due to ServeAPI error: %v\n", errAPI)
 	}
 }

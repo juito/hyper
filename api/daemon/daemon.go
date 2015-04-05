@@ -22,6 +22,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {
+		fmt.Printf("Engine Register: name= %s\n", name)
 		if err := eng.Register(name, method); err != nil {
 			return err
 		}
