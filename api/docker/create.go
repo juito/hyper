@@ -24,11 +24,12 @@ func (cli *DockerCli) SendCmdCreate(args ...string) error {
 	v := url.Values{}
 	v.Set("fromImage", repos)
 	v.Set("tag", tag)
-	_, statusCode, err := cli.Call("POST", "/image/create?"+ v.Encode(), nil, nil)
+	fmt.Printf("The Repository is %s, and the tag is %s\n", repos, tag)
+	_, statusCode, err := cli.Call("POST", "/images/create?"+ v.Encode(), nil, nil)
+	fmt.Printf("The returned status code is %s", statusCode)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("The returned status code is %s", statusCode)
 	//response, err := cli.createContainer(config, hostConfig, hostConfig.ContainerIDFile, *flName)
 	return nil
 }

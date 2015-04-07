@@ -21,6 +21,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 	// Now, we just install a command 'info' to set/get the information of the docker and DVM daemon
 	for name, method := range map[string]engine.Handler{
 		"info":              daemon.CmdInfo,
+		"create":			 daemon.CmdCreate,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {

@@ -168,6 +168,12 @@ func getInfo(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 	return nil
 }
 
+func postImageCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	w.Header().Set("Content-Type", "application/json")
+	eng.ServeHTTP(w, r)
+	return nil
+}
+
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -257,6 +263,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/version":                        getVersion,
 		},
 		"POST": {
+			"/image/create":				   postImageCreate,
 		},
 		"DELETE": {
 		},
@@ -273,7 +280,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 
 	for method, routes := range m {
 		for route, fct := range routes {
-			fmt.Printf("Registering %s, %s", method, route)
+			fmt.Printf("Registering %s, %s\n", method, route)
 			// NOTE: scope issue, make sure the variables are local and won't be changed
 			localRoute := route
 			localFct := fct
