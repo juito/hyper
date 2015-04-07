@@ -2,15 +2,30 @@ package daemon
 
 import (
 	"os"
+	"fmt"
 
 	"dvm/dvmversion"
 	"dvm/engine"
 )
 
 func (daemon *Daemon) CmdInfo(job *engine.Job) error {
+	cli := daemon.dockerCli
+	body, _, err := cli.SendCmdInfo("")
+	out := engine.NewOutput()
+	remoteInfo, err := out.AddEnv()
+	if err != nil {
+		return err
+	}
+	if _, err := out.Write(body); err != nil {
+		return fmt.Errorf("Error while reading remote info!\n")
+	}
+	out.Close()
+
 	v := &engine.Env{}
 	v.SetJson("ID", daemon.ID)
-	v.SetInt("Containers", 10)
+	if remoteInfo.Exists("Containers") {
+		v.SetInt("Containers", remoteInfo.GetInt("Containers"))
+	}
 	v.SetInt("Images", 20)
 	v.Set("Driver", "test-1")
 	v.SetBool("Debug", true)
