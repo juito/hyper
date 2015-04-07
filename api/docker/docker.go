@@ -166,12 +166,12 @@ func (cli *DockerCli) clientRequest(method, path string, in io.Reader, headers m
 	}
 
 	if statusCode <200 || statusCode >= 400 {
-		_, err := ioutil.ReadAll(resp.Body)
+		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return nil, "", statusCode, err
 		}
 
-		return nil, "", statusCode, fmt.Errorf("An error encountered returned from Docker daemon!\n")
+		return nil, "", statusCode, fmt.Errorf("An error encountered returned from Docker daemon, %s\n", bytes.TrimSpace(body))
 	}
 	return resp.Body, resp.Header.Get("Content-Type"), statusCode, nil
 }

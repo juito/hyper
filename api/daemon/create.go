@@ -6,7 +6,7 @@ import (
 
 func (daemon *Daemon) CmdCreate(job *engine.Job) error {
 	cli := daemon.dockerCli
-	err := cli.SendCmdCreate("tomcat:latest")
+	err := cli.SendCmdCreate("hello-world:latest")
 	if err != nil {
 		return err
 	}
