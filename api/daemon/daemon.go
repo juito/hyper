@@ -7,11 +7,13 @@ import (
 	apiserver "dvm/api/server"
 	"dvm/engine"
 	"dvm/lib/portallocator"
+	"dvm/api/docker"
 )
 
 type Daemon struct {
 	ID               string
 	eng              *engine.Engine
+	dockerCli		 *docker.DockerCli
 }
 
 // Install installs daemon capabilities to eng.
@@ -66,9 +68,15 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 		return nil, err
 	}
 
+	var (
+		proto = "unix"
+		addr = "/var/run/docker.sock"
+	)
+	dockerCli := docker.NewDockerCli("", proto, addr, nil)
 	daemon := &Daemon{
 		ID:               "1024",
 		eng:              eng,
+		dockerCli:		  dockerCli,
 	}
 
 	eng.OnShutdown(func() {

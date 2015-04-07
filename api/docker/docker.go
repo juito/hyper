@@ -3,10 +3,16 @@ package docker
 
 import (
 	"fmt"
-	"cryptio/tls"
+	"bytes"
+	"encoding/json"
+	"net"
+	"crypto/tls"
 	"net/http"
 	"time"
 	"io/ioutil"
+	"errors"
+	"io"
+	"strings"
 )
 
 // Now, the DVM will not support the TLS with docker.
@@ -19,9 +25,10 @@ const (
 	defaultCertFile = "cert.pem"
 	defaultHostAddress = "unix:///var/run/docker.sock"
 	defaultProto = "unix"
+	dockerClientVersion = "1.17"
 )
 // Define some common configuration of the Docker daemon
-type DockerConfig struct (
+type DockerConfig struct {
 	host string
 	address   string
 	trustKeyFile string
@@ -30,14 +37,14 @@ type DockerConfig struct (
 	certFile string
 	debugMode int
 	tlsConfig *tls.Config
-)
+}
 
-type DockerCli struct (
+type DockerCli struct {
 	proto			string
 	scheme			string
 	dockerConfig	*DockerConfig
-	http			*http.Transport
-)
+	transport		*http.Transport
+}
 
 func NewDockerCli (keyFile string, proto, addr string, tlsConfig *tls.Config) *DockerCli {
 	var (
@@ -50,10 +57,10 @@ func NewDockerCli (keyFile string, proto, addr string, tlsConfig *tls.Config) *D
 	}
 
 	tr := &http.Transport {
-		TLSClientConfig: tlsConfig
+		TLSClientConfig: tlsConfig,
 	}
 
-	timout = 32 * time.Second
+	timeout := 32 * time.Second
 	if proto == "unix" {
 		tr.DisableCompression = true
 		tr.Dial = func(_, _ string) (net.Conn, error) {
@@ -66,10 +73,10 @@ func NewDockerCli (keyFile string, proto, addr string, tlsConfig *tls.Config) *D
 
 	dockerConfig.host = ""
 	dockerConfig.address = addr
-	if keyFile != nil {
-		dockerConfig.keyFile = keyFile
-	} else {
+	if keyFile == "" {
 		dockerConfig.keyFile = defaultKeyFile
+	} else {
+		dockerConfig.keyFile = keyFile
 	}
 	dockerConfig.certFile = defaultCertFile
 	dockerConfig.caFile = defaultCaFile
@@ -78,22 +85,109 @@ func NewDockerCli (keyFile string, proto, addr string, tlsConfig *tls.Config) *D
 	dockerConfig.tlsConfig = tlsConfig
 
 	return &DockerCli {
-		proto:			proto
-		scheme:			scheme
-		dockerConfig:   &dockerConfig
-		transport:		tr
+		proto:			proto,
+		scheme:			scheme,
+		dockerConfig:   &dockerConfig,
+		transport:		tr,
 	}
 }
 
 func (cli *DockerCli) ExecDockerCmd (args ...string) ([]byte, int, error) {
-	command := args[:1]
+	command := args[0]
 	switch command {
 	case "info":
-		return cli.SendCmdInfo(args[1:])
+		return cli.SendCmdInfo(args[1])
 	default:
-		return nil, nil, error.New("This cmd %s is not supported!\n", command)
+		return nil, -1, errors.New("This cmd is not supported!\n")
 	}
-	return nil, nil, error.New("The ExecDockerCmd function is done!")
+	return nil, -1, errors.New("The ExecDockerCmd function is done!\n")
+}
+
+func (cli *DockerCli) HTTPClient() *http.Client {
+	return &http.Client{ Transport: cli.transport}
+}
+
+func (cli *DockerCli) encodeData(data interface{}) (*bytes.Buffer, error) {
+	params := bytes.NewBuffer(nil)
+	if data != nil {
+		buf, err := json.Marshal(data)
+		if err != nil {
+			return nil, err
+		}
+		if _, err := params.Write(buf); err != nil {
+			return nil, err
+		}
+	}
+	return params, nil
+}
+
+func (cli *DockerCli) clientRequest(method, path string, in io.Reader, headers map[string][]string) (io.ReadCloser, string, int, error) {
+	if method != "GET" && method != "POST" {
+		return nil, "", -1, fmt.Errorf("Can not support that method!\n")
+	}
+
+	if in == nil {
+		in = bytes.NewReader([]byte{})
+	}
+	req, err := http.NewRequest(method, fmt.Sprintf("/v%s%s", dockerClientVersion, path), in)
+	if err != nil {
+		return nil, "", -1, err
+	}
+	req.Header.Set("User-Agent", "Docker-client/"+dockerClientVersion)
+	req.URL.Host = cli.dockerConfig.address
+	req.URL.Scheme = cli.scheme
+	if headers != nil {
+		for k, v := range headers {
+			req.Header[k] = v
+		}
+	}
+
+	if req.Header.Get("Content-Type") == "" {
+		req.Header.Set("Content-Type", "text/plain")
+	}
+
+	resp, err := cli.HTTPClient().Do(req)
+	statusCode := -1
+	if resp != nil {
+		statusCode = resp.StatusCode
+	}
+
+	if err != nil {
+		if strings.Contains(err.Error(), "connection refused") {
+			return nil, "", statusCode, err
+		}
+
+		if cli.dockerConfig.tlsConfig == nil {
+			return nil, "", statusCode, fmt.Errorf("Are you trying to connect with a TLS-enabled daemon without TLS, %v", err)
+		}
+		return nil, "", statusCode, fmt.Errorf("An error encountered while connecting: %v", err)
+	}
+
+	if statusCode <200 || statusCode >= 400 {
+		_, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return nil, "", statusCode, err
+		}
+
+		return nil, "", statusCode, fmt.Errorf("An error encountered returned from Docker daemon!\n")
+	}
+	return resp.Body, resp.Header.Get("Content-Type"), statusCode, nil
+}
+
+func (cli *DockerCli) Call(method, path string, data interface{}, headers map[string][]string) (io.ReadCloser, int, error) {
+	params, err := cli.encodeData(data)
+	if err != nil {
+		return nil, -1, err
+	}
+
+	if data != nil {
+		if headers == nil {
+			headers = make(map[string][]string)
+		}
+		headers["Content-Type"] = []string{"application/json"}
+	}
+	body, _, statusCode, err := cli.clientRequest(method, path, params, headers)
+	return body, statusCode, err
 }
 
 func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, error) {
@@ -104,8 +198,8 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 	if err != nil {
 		return nil, statusCode, err
 	}
-
-	if body, _, err := ioutil.ReadAll(stream); err != nil {
+	body, err := ioutil.ReadAll(stream)
+	if err != nil {
 		return nil, -1, err
 	}
 	return body, statusCode, nil

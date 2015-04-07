@@ -21,6 +21,7 @@ func mainDaemon() {
 		return
 	}
 
+	daemonInitWait := make(chan error)
 	// Install the accepted jobs
 	if err := d.Install(eng); err != nil {
 		fmt.Printf("ERROR: the daemin install failed!\n")
@@ -41,6 +42,7 @@ func mainDaemon() {
 	defaulthost := "unix:///var/run/dvm.sock"
 
 	job := eng.Job("serveapi", defaulthost)
+	daemonInitWait <-nil
 
 	// The serve API job never exits unless an error occurs
 	// We need to start it as a goroutine and wait on it so
