@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"os"
 )
 
 type Config struct {
@@ -108,7 +109,7 @@ func (cli *DockerCli) SendCmdCreate(args ...string) error {
 	if statusCode == 404 || (err != nil && strings.Contains(err.Error(), repos)) {
 		fmt.Printf("can not find the image %s\n", repos)
 		fmt.Printf("pull the image from the repository!\n")
-		_, statusCode, err = cli.Call("POST", "/images/create?"+ v.Encode(), nil, nil)
+		err = cli.Stream("POST", "/images/create?"+ v.Encode(), nil, os.Stdout, nil)
 		if err != nil {
 			return err
 		}

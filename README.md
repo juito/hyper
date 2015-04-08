@@ -12,3 +12,11 @@
 ### DVM daemon side
 * go build daemon.go
 * ./davmon
+
+# RUN
+### DVM daemon side
+* ./daemon with root
+
+### DVM client side
+* ./dvmcli info
+* ./dvmcli create (This command will create a new container of "hello-world")
