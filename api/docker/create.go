@@ -83,7 +83,7 @@ type ConfigAndHostConfig struct {
 	HostConfig HostConfig
 }
 
-func (cli *DockerCli) SendCmdCreate(args ...string) error {
+func (cli *DockerCli) SendCmdCreate(args ...string) ([]byte, int, error) {
 	// We need to create a container via an image object.  If the image
 	// is not stored locally, so we need to pull the image from the Docker HUB.
 	// After that, we have prepared the whole stuffs to create a container.
@@ -104,22 +104,25 @@ func (cli *DockerCli) SendCmdCreate(args ...string) error {
 	containerValues := url.Values{}
 	config := initAndMergeConfigs()
 	fmt.Printf("The Repository is %s, and the tag is %s\n", repos, tag)
-	_, statusCode, err := cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
+	body, statusCode, err := cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
 	fmt.Printf("The returned status code is %s!\n", statusCode)
 	if statusCode == 404 || (err != nil && strings.Contains(err.Error(), repos)) {
 		fmt.Printf("can not find the image %s\n", repos)
 		fmt.Printf("pull the image from the repository!\n")
 		err = cli.Stream("POST", "/images/create?"+ v.Encode(), nil, os.Stdout, nil)
 		if err != nil {
-			return err
+			return nil, -1, err
 		}
-		_, statusCode, err = cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
-		if err != nil || statusCode != 201 {
-			return err
+		body, statusCode, err = cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
+		if err != nil {
+			return nil, -1, err
+		}
+		if statusCode != 201 {
+			return nil, statusCode, fmt.Errorf("Container create process encountered error, the status code is %s\n", statusCode)
 		}
 	}
 	//response, err := cli.createContainer(config, hostConfig, hostConfig.ContainerIDFile, *flName)
-	return nil
+	return readBody(body, statusCode, err)
 }
 
 func parseTheGivenImageName(image string) (string, string) {
