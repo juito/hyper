@@ -144,7 +144,7 @@ func parseTheGivenImageName(image string) (string, string) {
 
 func initAndMergeConfigs() *ConfigAndHostConfig {
 	config := &Config {
-		Image: "hello-world:latest",
+		Image: "tomcat:latest",
 	}
 
 	hostConfig := &HostConfig {}

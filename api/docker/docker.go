@@ -98,7 +98,7 @@ func (cli *DockerCli) ExecDockerCmd (args ...string) ([]byte, int, error) {
 	case "info":
 		return cli.SendCmdInfo(args[1])
 	case "create":
-		return nil, 0, cli.SendCmdCreate(args[1])
+		return cli.SendCmdCreate(args[1])
 	default:
 		return nil, -1, errors.New("This cmd is not supported!\n")
 	}
