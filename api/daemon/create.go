@@ -12,6 +12,7 @@ import (
 	"strings"
 	"dvm/engine"
 )
+
 type jsonMetadata struct {
 	Device_id int      `json:"device_id"`
 	Size      int      `json:"size"`
@@ -131,18 +132,20 @@ func attachFiles(containerId, fromFile, toDir string) error {
 
 	// It just need the block device without copying any files
 	if fromFile == "" || toDir == "" {
-		// FIXME: we need to unmout the device from the mounted directory
+		// we need to unmout the device from the mounted directory
+		syscall.Unmount(devFullName, syscall.MNT_DETACH)
 		return nil
 	}
 	// Make a new file with the given premission and wirte the source file content in it
 	if _, err := os.Stat(fromFile); err != nil && os.IsNotExist(err) {
 		// The gived file is not exist, we need to unmout the device and return
-		// FIXME: unmout the device
+		syscall.Unmount(devFullName, syscall.MNT_DETACH)
 		return nil
 	}
 	buf, err := ioutil.ReadFile(fromFile)
 	if err != nil {
-		//FIXME: unmout the device
+		// unmout the device
+		syscall.Unmount(devFullName, syscall.MNT_DETACH)
 		return err
 	}
 	targetInfo, err := os.Stat(targetDir)
@@ -152,7 +155,8 @@ func attachFiles(containerId, fromFile, toDir string) error {
 			// we need to create a target directory with given premission
 			// FIXME: we need to modify this 0755 with the given argument
 			if err := os.MkdirAll(targetDir, 0755); err != nil {
-				// FIXME: we need to unmout the device
+				// we need to unmout the device
+				syscall.Unmount(devFullName, syscall.MNT_DETACH)
 				return err
 			}
 			targetFile = path.Join(targetDir, filepath.Base(fromFile))
@@ -160,7 +164,8 @@ func attachFiles(containerId, fromFile, toDir string) error {
 			tmpDir := filepath.Dir(targetDir)
 			if _, err := os.Stat(tmpDir); err != nil && os.IsNotExist(err) {
 				if err := os.MkdirAll(tmpDir, 0755); err != nil {
-					// FIXME: we need to unmout the device
+					// we need to unmout the device
+					syscall.Unmount(devFullName, syscall.MNT_DETACH)
 					return err
 				}
 			}
@@ -170,11 +175,12 @@ func attachFiles(containerId, fromFile, toDir string) error {
 	}
 	err = ioutil.WriteFile(targetFile, buf, 0755)
 	if err != nil {
-		// FIXME: we need to unmout the device
+		// we need to unmout the device
+		syscall.Unmount(devFullName, syscall.MNT_DETACH)
 		return err
 	}
-	// FIXME: finally we need to unmout the device
-
+	// finally we need to unmout the device
+	syscall.Unmount(devFullName, syscall.MNT_DETACH)
 	return nil
 }
 
