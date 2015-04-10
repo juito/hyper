@@ -21,8 +21,9 @@ type jsonMetadata struct {
 }
 
 func (daemon *Daemon) CmdCreate(job *engine.Job) error {
+	imgName := job.Args[0]
 	cli := daemon.dockerCli
-	body, _, err := cli.SendCmdCreate("tomcat:latest")
+	body, _, err := cli.SendCmdCreate(imgName)
 	if err != nil {
 		return err
 	}
@@ -38,10 +39,11 @@ func (daemon *Daemon) CmdCreate(job *engine.Job) error {
 
 	v := &engine.Env{}
 	v.SetJson("ID", daemon.ID)
-	if remoteInfo.Exists("Id") {
-		v.Set("ContainerID", remoteInfo.Get("Id"))
-		fmt.Printf("The ContainerID is %s\n", remoteInfo.Get("Id"))
-		containerId := remoteInfo.Get("Id")
+	containerId := remoteInfo.Get("Id")
+	if containerId != "" {
+		v.Set("ContainerID", containerId)
+		fmt.Printf("The ContainerID is %s\n", containerId)
+
 		err := attachFiles(containerId, "/home/lei/src/github.com/gorilla/context/README.md", "/usr/local/man/")
 		if err != nil {
 			return err

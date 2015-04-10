@@ -101,8 +101,9 @@ func (cli *DockerCli) SendCmdCreate(args ...string) ([]byte, int, error) {
 	v := url.Values{}
 	v.Set("fromImage", repos)
 	v.Set("tag", tag)
+	imageAndTag := fmt.Sprintf("%s:%s", repos, tag)
 	containerValues := url.Values{}
-	config := initAndMergeConfigs()
+	config := initAndMergeConfigs(imageAndTag)
 	fmt.Printf("The Repository is %s, and the tag is %s\n", repos, tag)
 	body, statusCode, err := cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
 	fmt.Printf("The returned status code is %s!\n", statusCode)
@@ -142,9 +143,10 @@ func parseTheGivenImageName(image string) (string, string) {
 	return image, ""
 }
 
-func initAndMergeConfigs() *ConfigAndHostConfig {
+func initAndMergeConfigs(args ...string) *ConfigAndHostConfig {
+	imgName := args[0]
 	config := &Config {
-		Image: "tomcat:latest",
+		Image: imgName,
 	}
 
 	hostConfig := &HostConfig {}

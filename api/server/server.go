@@ -1,6 +1,7 @@
 package server
 
 import (
+	"bytes"
 	"syscall"
 	"encoding/json"
 	"expvar"
@@ -169,9 +170,33 @@ func getInfo(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 }
 
 func postContainerCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	w.Header().Set("Content-Type", "application/json")
-	eng.ServeHTTP(w, r)
-	return nil
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	fmt.Printf("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	job := eng.Job("create", r.Form.Get("imageName"))
+	stdoutBuf := bytes.NewBuffer(nil)
+	stderrBuf := bytes.NewBuffer(nil)
+
+	job.Stdout.Add(stdoutBuf)
+	job.Stderr.Add(stderrBuf)
+	if err := job.Run(); err != nil {
+		return err
+	}
+
+	var (
+		env engine.Env
+		dat map[string] interface{}
+		returnedJSONstr string
+	)
+	returnedJSONstr = engine.Tail(stdoutBuf, 1)
+	if err := json.Unmarshal([]byte(returnedJSONstr), &dat); err != nil {
+		return err
+	}
+
+	env.Set("ContainerID", dat["ContainerID"].(string))
+	return writeJSONEnv(w, http.StatusCreated, env)
 }
 
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -193,10 +218,10 @@ func ping(eng *engine.Engine, version version.Version, w http.ResponseWriter, r 
 func makeHttpHandler(eng *engine.Engine, logging bool, localMethod string, localRoute string, handlerFunc HttpApiFunc, corsHeaders string, dockerVersion version.Version) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// log the request
-		fmt.Printf("Calling %s %s", localMethod, localRoute)
+		fmt.Printf("Calling %s %s\n", localMethod, localRoute)
 
 		if logging {
-			fmt.Printf("%s %s", r.Method, r.RequestURI)
+			fmt.Printf("%s %s\n", r.Method, r.RequestURI)
 		}
 
 		if strings.Contains(r.Header.Get("User-Agent"), "Docker-Client/") {
@@ -263,7 +288,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/version":                        getVersion,
 		},
 		"POST": {
-			"/container/create":				   postContainerCreate,
+			"/container/create":			   postContainerCreate,
 		},
 		"DELETE": {
 		},
