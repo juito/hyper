@@ -22,6 +22,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 	for name, method := range map[string]engine.Handler{
 		"info":              daemon.CmdInfo,
 		"create":			 daemon.CmdCreate,
+		"pull":				 daemon.CmdPull,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {

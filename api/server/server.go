@@ -199,6 +199,22 @@ func postContainerCreate(eng *engine.Engine, version version.Version, w http.Res
 	return writeJSONEnv(w, http.StatusCreated, env)
 }
 
+func postImageCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	fmt.Printf("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	job := eng.Job("pull", r.Form.Get("imageName"))
+	stdoutBuf := bytes.NewBuffer(nil)
+
+	job.Stdout.Add(stdoutBuf)
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -289,6 +305,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 		},
 		"POST": {
 			"/container/create":			   postContainerCreate,
+			"/image/create":				   postImageCreate,
 		},
 		"DELETE": {
 		},
