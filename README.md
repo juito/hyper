@@ -19,4 +19,4 @@
 
 ### DVM client side
 * ./dvmcli info
-* ./dvmcli create (This command will create a new container of "hello-world")
+* ./dvmcli create tomcat:latest (This command will create a new container of "tomcat:latest")
