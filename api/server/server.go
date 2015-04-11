@@ -199,6 +199,20 @@ func postContainerCreate(eng *engine.Engine, version version.Version, w http.Res
 	return writeJSONEnv(w, http.StatusCreated, env)
 }
 
+func postPodCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	fmt.Printf("DVM LOG: Args string is %s\n", r.Form.Get("podArgs"))
+	job := eng.Job("create", r.Form.Get("podArgs"))
+
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func postImageCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := r.ParseForm(); err != nil {
 		return nil
@@ -306,6 +320,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 		"POST": {
 			"/container/create":			   postContainerCreate,
 			"/image/create":				   postImageCreate,
+			"/pod/create":					   postPodCreate,
 		},
 		"DELETE": {
 		},

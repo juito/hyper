@@ -72,7 +72,7 @@ type UserPod struct {
     Volumes         []UserVolume         `json:"volumes"`
 }
 
-func ProcessPodFile(jsonFile string) (*UserPod, error) {
+func ProcessPodFile(jsonFile string) (*UserPod, error ) {
     if _, err := os.Stat(jsonFile); err != nil && os.IsNotExist(err) {
         return nil, err
     }
@@ -80,6 +80,11 @@ func ProcessPodFile(jsonFile string) (*UserPod, error) {
     if err != nil {
         return nil, err
     }
+    return ProcessPodBytes(body)
+}
+
+func ProcessPodBytes(body []byte) (*UserPod, error) {
+
     var userPod UserPod
     if err := json.Unmarshal(body, &userPod); err != nil {
         return nil, err
