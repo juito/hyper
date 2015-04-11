@@ -6,17 +6,6 @@ import (
     "errors"
 )
 
-const (
-    QMP_COMMAND = iota
-    QMP_RESULT
-    QMP_ERROR
-    QMP_EVENT
-    QMP_INTERNAL_ERROR
-    QMP_QUIT
-
-    QMP_EVENT_SHUTDOWN = "SHUTDOWN"
-)
-
 type QmpWelcome struct {
     QMP     QmpInfo
 }
@@ -62,7 +51,7 @@ type QmpEvent struct {
 }
 
 func (qmp *QmpEvent) MessageType(){ return QMP_EVENT }
-func (qmp *QmpEvent) Event(){ return QmpEmit }
+func (qmp *QmpEvent) Event(){ return EVENT_QMP_EVENT }
 
 func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
     ts := genericGetField(msg, "timestamp")

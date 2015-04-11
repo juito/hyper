@@ -4,15 +4,8 @@ import (
     "net"
     "os"
     "strconv"
-)
-
-const (
-    BaseDir     = "/var/run/dvm"
-    DvmSockName = "dvm.sock"
-    QmpSockName = "qmp.sock"
-    ShareDir    = "share_dir"
-    Kernel      = "vmlinuz"
-    Initrd      = "initrd.img"
+    "sync"
+    "dvm/api/pod"
 )
 
 type QemuContext struct {
@@ -36,6 +29,11 @@ type QemuContext struct {
     dvmSock     *net.UnixListener
 
     handler     stateHandler
+
+    userSpec    *pod.UserPod
+    vmSpec      *VmPod
+
+    lock *sync.Mutex //protect update of context
 }
 
 type stateHandler func(ctx *QemuContext, event QemuEvent)
@@ -87,6 +85,7 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
         handler:    stateInit,
+        lock:       &sync.Mutex{},
     }
 }
 
@@ -98,7 +97,9 @@ func (ctx *QemuContext) Close() {
 }
 
 func (ctx *QemuContext) Become(handler stateHandler) {
+    ctx.lock.Lock()
     ctx.handler = handler
+    ctx.lock.Unlock()
 }
 
 func (ctx *QemuContext) QemuArguments() []string {

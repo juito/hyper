@@ -9,24 +9,6 @@ import (
     "dvm/api/pod"
 )
 
-// constants:
-
-const (
-    QemuExit = iota
-    QemuConnected
-    QmpEmit
-    QemuRunPod
-    NetworkInfAdd
-    NetworkInfDel
-    BlockDriveAdd
-    BlockDriveDel
-    DirAdd
-    DirDel
-    ContainerAdd
-    ContainerDel
-    PodCommit
-)
-
 // helpers
 type recoverOp func()
 
@@ -35,7 +17,6 @@ func cleanup(op recoverOp) {
 }
 
 // Message
-
 type VmMessage struct {
     message []byte
 }
@@ -59,7 +40,7 @@ type QemuExitEvent struct {
     message string
 }
 
-type QemuConnection struct {
+type InitConnectedEvent struct {
     conn *net.Conn
 }
 
@@ -68,11 +49,11 @@ type QemuRunPodEvent struct {
 }
 
 func (qe* QemuExitEvent) Event() int {
-    return QemuExit
+    return EVENT_QEMU_EXIT
 }
 
-func (qe* QemuConnection) Event() int {
-    return QemuConnected
+func (qe* InitConnectedEvent) Event() int {
+    return EVENT_INIT_CONNECTED
 }
 
 func (qe* QemuRunPodEvent) Event() int {
@@ -120,7 +101,7 @@ func waitInitReady(ctx *QemuContext) {
     for {
         conn, err := ctx.dvmSock.AcceptUnix()
         if err != nil {
-            ctx.hub <- &QemuConnection{conn:nil}
+            ctx.hub <- &InitConnectedEvent{conn:nil}
             return
         }
 
@@ -133,7 +114,7 @@ func waitInitReady(ctx *QemuContext) {
             } else if nr == 4 {
                 msg := binary.BigEndian.Uint32(buf[:4])
                 if msg == 0 {
-                    ctx.hub <- &QemuConnection{conn:conn}
+                    ctx.hub <- &InitConnectedEvent{conn:conn}
                     return
                 }
             } else {
@@ -154,6 +135,11 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
+    vmspec := MapToVmSpec(ctx,spec)
+    ctx.lock.Lock()
+    ctx.vmSpec = vmspec
+    ctx.userSpec = spec
+    ctx.lock.Unlock()
 
 }
 
@@ -161,7 +147,7 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
 
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
-    case QemuExit:
+    case EVENT_QEMU_EXIT:
         ctx.Close()
         ctx.Become(nil)
         return true
@@ -173,9 +159,9 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
 func stateInit(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
-        case QemuConnected:
-            if QemuConnection(*ev).conn != nil {
-                go waitCmdToInit(ctx, QemuConnection(*ev).conn)
+        case EVENT_INIT_CONNECTED:
+            if InitConnectedEvent(*ev).conn != nil {
+                go waitCmdToInit(ctx, InitConnectedEvent(*ev).conn)
             } else {
                 //
             }

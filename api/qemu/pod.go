@@ -5,6 +5,9 @@ import (
     "dvm/api/pod"
 )
 
+const (
+)
+
 //change first letter to uppercase and add json tag (thanks GNU sed):
 //  gsed -ie 's/^    \([a-z]\)\([a-zA-Z]*\)\( \{1,\}[^ ]\{1,\}.*\)$/    \U\1\E\2\3 `json:"\1\2"`/' pod.go
 
@@ -62,6 +65,16 @@ type VmPod struct {
     Routes      []VmRoute `json:"routes"`
     Socket      string `json:"socket"`
     ShareDir    string `json:"shareDir"`
+}
+
+type PreparingItem interface {
+    ItemType() string
+}
+
+
+
+type VmDevices struct {
+
 }
 
 func (pod *VmPod) Serialize() (*VmMessage,error) {
