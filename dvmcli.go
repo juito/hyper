@@ -23,7 +23,7 @@ func main() {
 	cli := client.NewDvmClient(proto, addr, nil)
 
 	if err := cli.Cmd(flag.Args()...); err != nil {
-		fmt.Printf("There is something worng during executing the command!\n");
+		fmt.Printf("DVM ERROR: %s\n", err.Error());
 	}
 }
 

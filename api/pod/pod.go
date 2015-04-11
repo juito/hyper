@@ -5,6 +5,7 @@ import (
     "fmt"
     "io/ioutil"
     "os"
+    "crypto/rand"
 )
 
 // Pod Data Structure
@@ -81,9 +82,56 @@ func ProcessPodFile(jsonFile string) (*UserPod, error) {
     }
     var userPod UserPod
     if err := json.Unmarshal(body, &userPod); err != nil {
-        return &userPod, nil
-
-    } else {
         return nil, err
     }
+
+    // we need to validate the given POD file
+    if userPod.Name == "" {
+        userPod.Name = randStr(10, "alphanum")
+    }
+
+    if userPod.Resource.Vcpu == 0 {
+        userPod.Resource.Vcpu = 1
+    }
+    if userPod.Resource.Memory == 0 {
+        userPod.Resource.Memory = 128
+    }
+
+    var (
+        v UserContainer
+        num = 0
+    )
+    for _, v = range userPod.Containers {
+        if v.Image == "" {
+            return nil, fmt.Errorf("Please specific your image for your container, it can not be null!\n")
+        }
+        num ++
+    }
+    if num == 0 {
+        return nil, fmt.Errorf("Please correct your POD file, the container section can not be null!\n")
+    }
+
+    return &userPod, nil
+}
+
+func randStr(strSize int, randType string) string {
+    var dictionary string
+    if randType == "alphanum" {
+        dictionary = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    }
+
+    if randType == "alpha" {
+        dictionary = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+    }
+
+    if randType == "number" {
+        dictionary = "0123456789"
+    }
+
+    var bytes = make([]byte, strSize)
+    rand.Read(bytes)
+    for k, v := range bytes {
+        bytes[k] = dictionary[v%byte(len(dictionary))]
+    }
+    return string(bytes)
 }
