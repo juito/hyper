@@ -2,72 +2,12 @@ package qemu
 
 import (
     "encoding/json"
+    "dvm/api/pod"
 )
 
 //change first letter to uppercase and add json tag (thanks GNU sed):
 //  gsed -ie 's/^    \([a-z]\)\([a-zA-Z]*\)\( \{1,\}[^ ]\{1,\}.*\)$/    \U\1\E\2\3 `json:"\1\2"`/' pod.go
 
-type UserContainerPort struct {
-    HostPort      int `json:"hostPort"`
-    ContainerPort int `json:"containerPort"`
-    ServicePort   int `json:"servicePort"`
-}
-
-type UserEnvironmentVar struct {
-    Env string `json:"env"`
-    Value string `json:"value"`
-}
-
-type UserVolumeReference struct {
-    Path    string `json:"path"`
-    Volume  string `json:"volume"`
-    ReadOnly  bool `json:"readOnly"`
-}
-
-type UserFileReference struct {
-    Path    string `json:"path"`
-    Filename string `json:"filename"`
-    Perm    string `json:"perm"`
-    User    string `json:"user"`
-    Group   string `json:"group"`
-}
-
-type UserContainer struct {
-    Name    string `json:"name"`
-    Image   string `json:"image"`
-    Command string `json:"command"`
-    Ports   []UserContainerPort `json:"ports"`
-    Envs    []UserEnvironmentVar `json:"envs"`
-    Volumes []UserVolumeReference `json:"volumes"`
-    Files   []UserFileReference `json:"files"`
-    RestartPolicy string `json:"restartPolicy"`
-}
-
-type UserResource struct {
-    Vcpu    int `json:"vcpu"`
-    Memory  int `json:"memory"`
-}
-
-type UserFile struct {
-    Name     string `json:"name"`
-    Encoding string `json:"encoding"`
-    Uri      string `json:"uri"`
-    Contents string `json:"contents"`
-}
-
-type UserVolume struct {
-    Name    string `json:"name"`
-    Source  string `json:"source"`
-    Driver  string `json:"driver"`
-}
-
-type UserPod struct {
-    Name string `json:"name"`
-    Containers  []UserContainer `json:"containers"`
-    Resource    UserResource `json:"resource"`
-    Files       []UserFile `json:"files"`
-    Volumes     []UserVolume `json:"volumes"`
-}
 
 // Vm DataStructure
 type VmVolumeDescriptor struct {
@@ -133,7 +73,7 @@ func (pod *VmPod) Serialize() (*VmMessage,error) {
     return buf,nil
 }
 
-func (spec *UserPod) MapToVmSpec(ctx *QemuContext) *VmPod {
+func MapToVmSpec(ctx *QemuContext, spec *pod.UserPod) *VmPod {
     containers := make([]VmContainer, len(spec.Containers))
     voltype:= make(map[string]bool)
     for _,vol := range spec.Volumes {
