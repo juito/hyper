@@ -6,6 +6,7 @@ import (
     "os/exec"
     "net"
     "strconv"
+    "dvm/api/pod"
 )
 
 // constants:
@@ -63,7 +64,7 @@ type QemuConnection struct {
 }
 
 type QemuRunPodEvent struct {
-    spec UserPod
+    spec *pod.UserPod
 }
 
 func (qe* QemuExitEvent) Event() int {
@@ -152,7 +153,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
     }
 }
 
-func prepareDevice(ctx *QemuContext, spec *UserPod) {
+func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
 
 }
 
