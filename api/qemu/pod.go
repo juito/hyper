@@ -73,32 +73,28 @@ func (pod *VmPod) Serialize() (*VmMessage,error) {
     return buf,nil
 }
 
-func classifyVolumes(spec []pod.UserVolume) (map[string]bool, map[string]string){
+func classifyVolumes(spec []pod.UserVolume) map[string]bool {
     isFsmap:= make(map[string]bool)
-    directDevices := make(map[string]string)
     for _,vol := range spec {
-        if vol.Source != nil && vol.Source != "" { //should create volumes
-            isFsmap[vol.Name] = false
-        } else if vol.Driver == "raw" || vol.Driver == "qcow2" { //should direct send to qemu
-            isFsmap[vol.Name] = false
-            directDevices[vol.Name] = vol.Driver
-        } else if vol.Driver == "vfs" {
+        if vol.Source != nil && vol.Source != "" && vol.Driver == "vfs"{
             isFsmap[vol.Name] = true
+        } else if  {
+            isFsmap[vol.Name] = false
         }
     }
-    return isFsmap,directDevices
+    return isFsmap
 }
 
 func MapToVmSpec(ctx *QemuContext, spec *pod.UserPod) *VmPod {
     containers := make([]VmContainer, len(spec.Containers))
 
-    isFsmap,_ := classifyVolumes(spec.Volumes)
+    isFsmap := classifyVolumes(spec.Volumes)
 
     for i,container := range spec.Containers {
 
         vols := []VmVolumeDescriptor{}
         fsmap := []VmFsmapDescriptor{}
-        for j,v := range container.Volumes {
+        for _,v := range container.Volumes {
             if isFsmap[v.Volume] {
                 fsmap = append(fsmap, VmFsmapDescriptor{
                     Source: nil,
