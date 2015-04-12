@@ -42,9 +42,32 @@ type QemuContext struct {
 }
 
 type deviceMap struct {
-    imageMap map[string]imagePosition
-    volumeMap map[string]volumePosition
-    fsmapMap map[string]fsmapPosition
+    imageMap map[string]*imageInfo
+    volumeMap map[string]*volumeInfo
+    fsmapMap map[string]*fsmapInfo
+}
+
+type blockDescriptor struct {
+    name        string
+    filename    string
+    format      string
+    deviceName  string
+}
+
+type imageInfo struct {
+    info        *blockDescriptor
+    pos         imagePosition
+}
+
+type volumeInfo struct {
+    info        *blockDescriptor
+    pos         volumePosition
+}
+
+type fsmapInfo struct {
+    name        string
+    dir         string
+    pos         fsmapPosition
 }
 
 type imagePosition map[uint]uint        //containerIdx -> imageIdx
@@ -53,9 +76,9 @@ type fsmapPosition map[uint]string      //containerIdx -> mpoint
 
 func newDeviceMap() *deviceMap {
     return &deviceMap{
-        imageMap:   make(map[string]imagePosition),
-        volumeMap:  make(map[string]volumePosition),
-        fsmapMap:   make(map[string]fsmapPosition),
+        imageMap:   make(map[string]*imageInfo),
+        volumeMap:  make(map[string]*volumeInfo),
+        fsmapMap:   make(map[string]*fsmapInfo),
     }
 }
 
@@ -67,17 +90,17 @@ type processingList struct {
 
 type processingMap struct {
     containers  map[uint]bool
-    blocks      map[string]bool
+    volumes     map[string]bool
+    blockdevs   map[string]bool
     fsmap       map[string]bool
-    images      map[string]bool
 }
 
 func newProcessingMap() *processingMap{
     return &processingMap{
-        containers: make(map[uint]bool),
-        blocks:     make(map[string]bool),
-        fsmap:      make(map[string]bool),
-        images:     make(map[string]bool),
+        containers: make(map[uint]bool),    //to be create, and get images,
+        volumes:    make(map[string]bool),  //to be create, and get volume
+        blockdevs:  make(map[string]bool),  //to be insert to qemu, both volume and images
+        fsmap:      make(map[string]bool),  //to be bind in share dir
     }
 }
 

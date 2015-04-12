@@ -135,12 +135,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
-    vmspec := MapToVmSpec(ctx,spec)
-    ctx.lock.Lock()
-    ctx.vmSpec = vmspec
-    ctx.userSpec = spec
-    ctx.lock.Unlock()
-
+    InitDeviceContext(ctx,spec)
 }
 
 // state machine
@@ -165,7 +160,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
             } else {
                 //
             }
-        case QemuRunPod:
+        case COMMAND_RUN_POD:
             go prepareDevice(ctx, QemuRunPodEvent(*ev).spec)
         }
     }
