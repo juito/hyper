@@ -70,12 +70,19 @@ type FsmapBoundEvent struct {
     Path        string  // path relative to share dir
 }
 
+type BlockdevInsertedEvent struct {
+    Name        string
+    SourceType  string //image or volume
+    DeviceName  string
+}
+
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeCreatedEvent)       Event() int { return EVENT_VOLUME_ADD }
 func (qe* FsmapBoundEvent)          Event() int { return EVENT_PATH_BOUND }
+func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
 
 // routines:
 

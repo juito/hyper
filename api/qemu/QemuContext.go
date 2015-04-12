@@ -131,6 +131,7 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
     c.Fstype = info.Fstype
     c.Cmd    = info.Cmd
     c.Workdir = info.Workdir
+    c.Images = make([]string, len(info.Images))
     for _,e := range c.Envs {
         if _,ok := info.Envs[e.Env]; ok {
             delete(info.Envs, e.Env)
@@ -197,6 +198,33 @@ func (ctx* QemuContext) pathBound(info *FsmapBoundEvent) {
     ctx.progress.finished.fsmap[info.Name] == true
     if _,ok := ctx.progress.adding.fsmap[info.Name] ; ok {
         delete(ctx.progress.adding.fsmap, info.Name)
+    }
+}
+
+func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+
+    if info.SourceType == "image" {
+        image := ctx.devices.imageMap[info.Name]
+        for c,img := range image.pos {
+            ctx.vmSpec.Containers[c].Images[img] = info.DeviceName
+        }
+    } else if info.SourceType = "volume" {
+        volume := ctx.devices.volumeMap[info.Name]
+        for c,vol := range volume.pos {
+            for i,v := range ctx.vmSpec.Containers[c].Volumes {
+                if v.Mount == vol {
+                    ctx.vmSpec.Containers[c].Volumes[i].Device == info.DeviceName
+                    ctx.vmSpec.Containers[c].Volumes[i].Fstype == volume.info.fstype
+                }
+            }
+        }
+    }
+
+    ctx.progress.finished.blockdevs[info.Name] == true
+    if _,ok := ctx.progress.adding.blockdevs[info.Name] ; ok {
+        delete(ctx.progress.adding.blockdevs, info.Name)
     }
 }
 
