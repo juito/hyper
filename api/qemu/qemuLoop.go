@@ -67,7 +67,7 @@ type VolumeCreatedEvent struct {
 
 type FsmapBoundEvent struct {
     Name        string
-    Path        string
+    Path        string  // path relative to share dir
 }
 
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
@@ -160,18 +160,18 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
         switch ev.Event() {
         case EVENT_INIT_CONNECTED:
             if InitConnectedEvent(*ev).conn != nil {
-                go waitCmdToInit(ctx, InitConnectedEvent(*ev).conn)
+                go waitCmdToInit(ctx, ev.(*InitConnectedEvent).conn)
             } else {
                 //
             }
         case COMMAND_RUN_POD:
-            go prepareDevice(ctx, RunPodCommand(*ev).Spec)
+            go prepareDevice(ctx, ev.(*RunPodCommand).Spec)
         case EVENT_CONTAINER_ADD:
-            needInserts := ctx.containerCreated(ev)
+            needInserts := ctx.containerCreated(ev.(*ContainerCreatedEvent))
             if len(needInserts) != 0 {
 
             } else if ctx.deviceReady() {
-                
+
             }
         }
     }

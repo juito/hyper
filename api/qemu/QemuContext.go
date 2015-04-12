@@ -164,6 +164,42 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
     return needInsert
 }
 
+func (ctx* QemuContext) volumeCreated(info *VolumeCreatedEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+
+    vol := ctx.devices.volumeMap[info.Name]
+    vol.info.filename = info.Filename
+    vol.info.format = info.Format
+    vol.info.fstype = info.Fstype
+
+    ctx.progress.finished.volumes[info.Name] == true
+    if _,ok := ctx.progress.adding.volumes[info.Name] ; ok {
+        delete(ctx.progress.adding.volumes, info.Name)
+    }
+}
+
+func (ctx* QemuContext) pathBound(info *FsmapBoundEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+
+    path := ctx.devices.fsmapMap[info.Name]
+    path.dir = info.Path
+
+    for i,mnt := range path.pos {
+        for j,dst := range ctx.vmSpec.Containers[i].Fsmap {
+            if dst.Path == mnt {
+                ctx.vmSpec.Containers[i].Fsmap[j].Source = info.Path
+            }
+        }
+    }
+
+    ctx.progress.finished.fsmap[info.Name] == true
+    if _,ok := ctx.progress.adding.fsmap[info.Name] ; ok {
+        delete(ctx.progress.adding.fsmap, info.Name)
+    }
+}
+
 func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
