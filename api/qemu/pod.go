@@ -79,14 +79,6 @@ type ContainerInfo struct {
     Cmd     string
 }
 
-type BlockInfo struct {
-
-}
-
-type VmDevices struct {
-
-}
-
 func (pod *VmPod) Serialize() (*VmMessage,error) {
     jv,err := json.Marshal(pod)
     if err != nil {
@@ -102,81 +94,4 @@ func (pod *VmPod) Serialize() (*VmMessage,error) {
 // 3. container should not use volume not in volume list
 func ValidateUserPod(spec *pod.UserPod) error {
     return nil
-}
-
-
-// InitDeviceContext will init device info in context
-func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
-    isFsmap:= make(map[string]bool)
-
-    ctx.lock.Lock()
-    defer ctx.lock.Unlock()
-
-    //classify volumes, and generate device info and progress info
-    for _,vol := range spec.Volumes {
-        if vol.Source == nil || vol.Source == "" {
-            isFsmap[vol.Name]    = false
-            ctx.devices.volumeMap[vol.Name] = &volumeInfo{
-                info: &blockDescriptor{ name: vol.Name, filename: nil, format:nil, deviceName: nil, },
-                pos:  make(map[uint]string),
-            }
-            ctx.progress.adding.volumes[vol.Name] = true
-        } else if vol.Driver == "raw" || vol.Driver == "qcow2" {
-            isFsmap[vol.Name]    = false
-            ctx.devices.volumeMap[vol.Name] = &volumeInfo{
-                info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, deviceName: nil, },
-                pos:  make(map[uint]string),
-            }
-            ctx.progress.adding.blockdevs[vol.Name] = true
-        } else if vol.Driver == "vfs" {
-            isFsmap[vol.Name]    = true
-            ctx.devices.fsmapMap[vol.Name] = &fsmapInfo{
-                name: vol.Name, dir: nil, pos: make(map[uint]string),
-            }
-            ctx.progress.adding.fsmap[vol.Name] = true
-        }
-    }
-
-    containers := make([]VmContainer, len(spec.Containers))
-
-    for i,container := range spec.Containers {
-        vols := []VmVolumeDescriptor{}
-        fsmap := []VmFsmapDescriptor{}
-        for _,v := range container.Volumes {
-            if isFsmap[v.Volume] {
-                fsmap = append(fsmap, VmFsmapDescriptor{
-                    Source: nil,  Path: v.Path, ReadOnly: v.ReadOnly,
-                })
-                ctx.devices.fsmapMap[v.Volume].pos[i] = v.Path
-            } else {
-                vols = append(vols, VmVolumeDescriptor{
-                    Device: nil, Mount:  v.Path, Fstype: "ext4", ReadOnly: v.ReadOnly,
-                })
-                ctx.devices.volumeMap[v.Volume].pos[i] = v.Path
-            }
-        }
-
-        envs := make([]VmEnvironmentVar, len(container.Envs))
-        for j,e := range container.Envs {
-            envs[j] = VmEnvironmentVar{ Env: e.Env, Value: e.Value,}
-        }
-
-        containers[i] = VmContainer{
-            Id:      nil,   Rootfs: "rootfs", Fstype: "ext4", Images:  nil,
-            Volumes: vols,  Fsmap:   fsmap,   Tty:     nil,
-            Workdir: nil,   Cmd:     nil,     Envs:    envs,
-            RestartPolicy: container.RestartPolicy,
-        }
-    }
-
-    ctx.vmSpec = &VmPod{
-        Hostname:       spec.Name,
-        Containers:     containers,
-        Interfaces:     nil,
-        Routes:         nil,
-        Socket:         ctx.dvmSockName,
-        ShareDir:       ctx.shareDir,
-    }
-
-    ctx.userSpec = spec
 }

@@ -2,7 +2,6 @@ package qemu
 
 import (
     "encoding/binary"
-//    "io"
     "os/exec"
     "net"
     "strconv"
@@ -44,21 +43,38 @@ type InitConnectedEvent struct {
     conn *net.Conn
 }
 
-type QemuRunPodEvent struct {
-    spec *pod.UserPod
+type RunPodCommand struct {
+    Spec *pod.UserPod
 }
 
-func (qe* QemuExitEvent) Event() int {
-    return EVENT_QEMU_EXIT
+type ContainerCreatedEvent struct {
+    Index   uint
+    Id      string
+    Rootfs  string
+    Images  []string
+    Fstype  string
+    Workdir string
+    Cmd     string
 }
 
-func (qe* InitConnectedEvent) Event() int {
-    return EVENT_INIT_CONNECTED
+type VolumeCreatedEvent struct {
+    Name        string
+    Filename    string
+    Fstype      string
+    Format      string
 }
 
-func (qe* QemuRunPodEvent) Event() int {
-    return
+type FsmapBoundEvent struct {
+    Name        string
+    Path        string
 }
+
+func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
+func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
+func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
+func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
+func (qe* VolumeCreatedEvent)       Event() int { return EVENT_VOLUME_ADD }
+func (qe* FsmapBoundEvent)          Event() int { return EVENT_PATH_BOUND }
 
 // routines:
 
@@ -72,26 +88,11 @@ func launchQemu(ctx *QemuContext) {
 
     cmd := exec.Command(qemu, ctx.QemuArguments()...)
 
-//    stderr,err := cmd.StderrPipe()
-//    if err != nil {
-//        hub <- &QemuExitEvent{message:"can not get stderr fd connected"}
-//        return
-//    }
     if err := cmd.Start();err != nil {
         ctx.hub <- &QemuExitEvent{message:"try to start qemu failed"}
         return
     }
-//    buf := make([]byte, 1024)
-//    for {
-//        n,err:=stderr.Read(buf)
-//        if err == io.EOF {
-//            log.Println("stderr finish")
-//            break
-//        } else if err != nil {
-//            log.Fatal(err)
-//        }
-//        log.Printf("got stderr: %s", string(buf[:n]))
-//    }
+
     err = cmd.Wait()
     ctx.hub <- &QemuExitEvent{message:"qemu exit with " + strconv.Itoa(err)}
 }
@@ -136,6 +137,8 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     InitDeviceContext(ctx,spec)
+    //call create containers
+    //call create volumes
 }
 
 // state machine
@@ -161,7 +164,9 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 //
             }
         case COMMAND_RUN_POD:
-            go prepareDevice(ctx, QemuRunPodEvent(*ev).spec)
+            go prepareDevice(ctx, RunPodCommand(*ev).Spec)
+        case EVENT_CONTAINER_ADD:
+
         }
     }
 }
