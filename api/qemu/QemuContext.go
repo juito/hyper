@@ -17,6 +17,7 @@ type QemuContext struct {
     kernel  string
     initrd  string
 
+    // Communication Context
     hub chan QemuEvent
     qmp chan QmpInteraction
     vm  chan *VmMessage
@@ -30,10 +31,62 @@ type QemuContext struct {
 
     handler     stateHandler
 
+    // Specification
     userSpec    *pod.UserPod
     vmSpec      *VmPod
+    devices     *deviceMap
+    progress    *processingList
 
+    // Internal Helper
     lock *sync.Mutex //protect update of context
+}
+
+type deviceMap struct {
+    imageMap map[string]imagePosition
+    volumeMap map[string]volumePosition
+    fsmapMap map[string]fsmapPosition
+}
+
+type imagePosition map[uint]uint        //containerIdx -> imageIdx
+type volumePosition map[uint]string     //containerIdx -> mpoint
+type fsmapPosition map[uint]string      //containerIdx -> mpoint
+
+func newDeviceMap() *deviceMap {
+    return &deviceMap{
+        imageMap:   make(map[string]imagePosition),
+        volumeMap:  make(map[string]volumePosition),
+        fsmapMap:   make(map[string]fsmapPosition),
+    }
+}
+
+type processingList struct {
+    adding      *processingMap
+    deleting    *processingMap
+    finished    *processingMap
+}
+
+type processingMap struct {
+    containers  map[uint]bool
+    blocks      map[string]bool
+    fsmap       map[string]bool
+    images      map[string]bool
+}
+
+func newProcessingMap() *processingMap{
+    return &processingMap{
+        containers: make(map[uint]bool),
+        blocks:     make(map[string]bool),
+        fsmap:      make(map[string]bool),
+        images:     make(map[string]bool),
+    }
+}
+
+func newProcessingList() *processingList{
+    return &processingList{
+        adding:     newProcessingMap(),
+        deleting:   newProcessingMap(),
+        finished:   newProcessingMap(),
+    }
 }
 
 type stateHandler func(ctx *QemuContext, event QemuEvent)
@@ -85,6 +138,10 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
         handler:    stateInit,
+        userSpec:   nil,
+        vmSpec:     nil,
+        devices:    newDeviceMap(),
+        progress:   newProcessingList(),
         lock:       &sync.Mutex{},
     }
 }
