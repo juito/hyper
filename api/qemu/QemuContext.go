@@ -96,6 +96,12 @@ type processingMap struct {
     fsmap       map[string]bool
 }
 
+func (pm *processingMap) isEmpty() bool {
+    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.fsmap == 0)
+}
+
+type stateHandler func(ctx *QemuContext, event QemuEvent)
+
 func newProcessingMap() *processingMap{
     return &processingMap{
         containers: make(map[uint]bool),    //to be create, and get images,
@@ -113,7 +119,54 @@ func newProcessingList() *processingList{
     }
 }
 
-type stateHandler func(ctx *QemuContext, event QemuEvent)
+func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+
+    needInsert := make([]string)
+
+    c := &ctx.vmSpec.Containers[info.Index]
+    c.Id     = info.Id
+    c.Rootfs = info.Rootfs
+    c.Fstype = info.Fstype
+    c.Cmd    = info.Cmd
+    c.Workdir = info.Workdir
+    for _,e := range c.Envs {
+        if _,ok := info.Envs[e.Env]; ok {
+            delete(info.Envs, e.Env)
+        }
+    }
+    for e,v := range info.Envs {
+        c.Envs = append(c.Envs, VmEnvironmentVar{Env:e, Value:v,})
+    }
+
+    for i,image := range info.Images {
+        if img,ok := ctx.devices.imageMap[image]; ok {
+            img.pos[info.Index] = i
+        } else {
+            ctx.devices.imageMap[image] = &imageInfo{
+                info: &blockDescriptor{ name: image, filename: image, format:"raw", fstype:info.Fstype, deviceName: nil, },
+                pos: make(map[uint]uint),
+            }
+            ctx.devices.imageMap[image].pos[info.Index] = i
+        }
+        if _,ok := ctx.progress.finished.blockdevs[image]; !ok {
+            if _,adding := ctx.progress.adding.blockdevs[image]; !adding {
+                ctx.progress.adding.blockdevs[image] = true
+                needInsert = append(needInsert, image)
+            }
+        }
+    }
+
+    ctx.progress.finished.containers[info.Index] = true
+    delete(ctx.progress.adding.containers, info.Index)
+
+    return needInsert
+}
+
+func (ctx* QemuContext) deviceReady() bool {
+    return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
+}
 
 func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
 
@@ -275,4 +328,3 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
 
     ctx.userSpec = spec
 }
-

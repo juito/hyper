@@ -55,6 +55,7 @@ type ContainerCreatedEvent struct {
     Fstype  string
     Workdir string
     Cmd     string
+    Envs    map[string]string
 }
 
 type VolumeCreatedEvent struct {
@@ -166,7 +167,12 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
         case COMMAND_RUN_POD:
             go prepareDevice(ctx, RunPodCommand(*ev).Spec)
         case EVENT_CONTAINER_ADD:
+            needInserts := ctx.containerCreated(ev)
+            if len(needInserts) != 0 {
 
+            } else if ctx.deviceReady() {
+                
+            }
         }
     }
 }
