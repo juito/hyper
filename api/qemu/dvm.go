@@ -1,13 +1,29 @@
 package qemu
 
 import (
+	"fmt"
+	"syscall"
+	"os/exec"
+	"path"
+	"path/filepath"
+	"os"
+	"io/ioutil"
+	"encoding/json"
+	"strings"
+	"strconv"
     "dvm/api/docker"
     "dvm/api/pod"
     "dvm/engine"
 )
 
+type jsonMetadata struct {
+	Device_id int      `json:"device_id"`
+	Size      int      `json:"size"`
+	Transaction_id int `json:"transaction_id"`
+	Initialized bool   `json:"initialized"`
+}
 
-func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedChan chan ContainerCreatedEvent, volReadyChan chan VolumeReadyEvent) (string, error) {
+func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedChan chan QemuEvent, volReadyChan chan QemuEvent) (string, error) {
     var (
         proto = "unix"
         addr = "/var/run/docker.sock"
