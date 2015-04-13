@@ -51,9 +51,8 @@ type ContainerCreatedEvent struct {
     Index   uint
     Id      string
     Rootfs  string
-    Images  []string
+    Image   []string
     Fstype  string
-    ImateType string
     Workdir string
     Cmd     []string
     Envs    map[string]string
