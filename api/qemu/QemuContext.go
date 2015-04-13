@@ -212,6 +212,7 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
         }
     } else if info.SourceType = "volume" {
         volume := ctx.devices.volumeMap[info.Name]
+        volume.info.deviceName = info.DeviceName
         for c,vol := range volume.pos {
             for i,v := range ctx.vmSpec.Containers[c].Volumes {
                 if v.Mount == vol {
