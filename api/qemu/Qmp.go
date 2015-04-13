@@ -213,25 +213,28 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
     }
 }
 
-func newNetworkAddSession(ctx *QemuContext, addr int) *QmpSession {
+func newNetworkAddSession(ctx *QemuContext, device string, index, addr int) *QmpSession {
     busAddr := fmt.Sprintf("0x%x", addr)
-    devId := "hostnet-" + busAddr
     commands := make([]*QmpCommand, 2)
     commands[0] = &QmpCommand{
         Execute: "netdev_add",
         Arguments: map[string]interface{}{
-            "type":"tap","id":devId,"script":"no",
+            "type":"tap","id":device,"script":"no",
         },
     }
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"virtio-net-pci","netdev":devId,"id":"net-" + busAddr,"bus":"pci.0","addr":busAddr,
+            "driver":"virtio-net-pci","netdev":device,"id":"net-" + busAddr,"bus":"pci.0","addr":busAddr,
         },
     }
     return &QmpSession{
         commands: commands,
-        callback: nil,
+        callback: &NetDevInsertedEvent{
+            Index:      index,
+            DeviceName: device,
+            Address:    addr,
+        },
     }
 }
 

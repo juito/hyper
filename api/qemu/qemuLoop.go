@@ -62,6 +62,17 @@ type BlockdevInsertedEvent struct {
     DeviceName  string
 }
 
+type InterfaceCreated struct {
+    Index       string
+    DeviceName  string
+}
+
+type NetDevInsertedEvent struct {
+    Index       string
+    DeviceName  string
+    Address     int
+}
+
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
@@ -69,6 +80,8 @@ func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
 func (qe* CommandAck)               Event() int { return COMMAND_ACK }
+func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
+func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
 
 // routines:
 
@@ -92,8 +105,12 @@ func launchQemu(ctx *QemuContext) {
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
-    InitDeviceContext(ctx,spec)
+    networks := 0
+    InitDeviceContext(ctx,spec, networks)
     go CreateContainer(spec, ctx.shareDir, ctx.hub)
+    if networks > 0 {
+        // TODO: go create interfaces here
+    }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
         sid := ctx.nextScsiId()
@@ -157,6 +174,16 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
             case EVENT_BLOCK_INSERTED:
                 info := ev.(*BlockdevInsertedEvent)
                 ctx.blockdevInserted(info)
+                if ctx.deviceReady() {
+                    runPod(ctx)
+                }
+            case EVENT_INTERFACE_ADD:
+                info := ev.(*InterfaceCreated)
+                addr := ctx.nextPciAddr()
+                ctx.qmp <- newNetworkAddSession(ctx, info.DeviceName, info.Index, addr)
+            case EVENT_INTERFACE_INSERTED:
+                info := ev.(*NetDevInsertedEvent)
+                ctx.netdevInserted(info)
                 if ctx.deviceReady() {
                     runPod(ctx)
                 }

@@ -43,8 +43,9 @@ type QemuContext struct {
 }
 
 type deviceMap struct {
-    imageMap   map[string]*imageInfo
+    imageMap    map[string]*imageInfo
     volumeMap   map[string]*volumeInfo
+    networkMap  map[uint]*networkInfo
 }
 
 type blockDescriptor struct {
@@ -66,6 +67,12 @@ type volumeInfo struct {
     readOnly    map[uint]bool
 }
 
+type networkInfo struct {
+    index   uint
+    address int
+    device  string
+}
+
 type volumePosition map[uint]string     //containerIdx -> mpoint
 type fsmapPosition map[uint]string      //containerIdx -> mpoint
 
@@ -73,6 +80,7 @@ func newDeviceMap() *deviceMap {
     return &deviceMap{
         imageMap:   make(map[string]*imageInfo),
         volumeMap:  make(map[string]*volumeInfo),
+        networkMap: make(map[uint]*networkInfo),
     }
 }
 
@@ -86,10 +94,11 @@ type processingMap struct {
     containers  map[uint]bool
     volumes     map[string]bool
     blockdevs   map[string]bool
+    networks    map[uint]bool
 }
 
 func (pm *processingMap) isEmpty() bool {
-    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0
+    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.networks) == 0
 }
 
 type stateHandler func(ctx *QemuContext, event QemuEvent)
@@ -116,6 +125,14 @@ func (ctx* QemuContext) nextScsiId() int {
     ctx.scsiId++
     ctx.lock.Unlock()
     return id
+}
+
+func (ctx* QemuContext) nextPciAddr() int {
+    ctx.lock.Lock()
+    addr := ctx.pciAddr
+    ctx.pciAddr ++
+    ctx.lock.Unlock()
+    return addr
 }
 
 func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
@@ -214,6 +231,18 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
     }
 }
 
+func (ctx* QemuContext) netdevInserted(info *NetDevInsertedEvent) {
+    ctx.progress.finished.networks[info.Index] = true
+    ctx.devices.networkMap[info.Index] = &networkInfo{
+        device:  info.DeviceName,
+        index:   info.Index,
+        address: info.Address,
+    }
+    if _,ok := ctx.progress.adding.networks[info.Index] ; ok {
+        delete(ctx.progress.adding.networks, info.Index)
+    }
+}
+
 func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
@@ -304,11 +333,15 @@ func (ctx *QemuContext) QemuArguments() []string {
 }
 
 // InitDeviceContext will init device info in context
-func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
+func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
     isFsmap:= make(map[string]bool)
 
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
+
+    for i:=0; i< networks ; i++ {
+        ctx.progress.adding.networks[i] = true
+    }
 
     //classify volumes, and generate device info and progress info
     for _,vol := range spec.Volumes {
