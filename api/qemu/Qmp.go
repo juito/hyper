@@ -1,6 +1,7 @@
 package qemu
 
 import (
+    "fmt"
     "encoding/json"
     "net"
     "errors"
@@ -27,23 +28,23 @@ type QmpInteraction interface {
 }
 
 type QmpQuit struct{}
-func (qmp *QmpQuit) MessageType() uint { return QMP_QUIT }
+func (qmp *QmpQuit) MessageType() int { return QMP_QUIT }
 
 type QmpInternalError struct { cause string}
-func (qmp *QmpInternalError) MessageType() uint { return QMP_INTERNAL_ERROR }
+func (qmp *QmpInternalError) MessageType() int { return QMP_INTERNAL_ERROR }
 
 type QmpSession struct {
     commands []QmpCommand
     callback QemuEvent
 }
-func (qmp *QmpCommand) MessageType() uint { return QMP_SESSION }
+func (qmp *QmpCommand) MessageType() int { return QMP_SESSION }
 
 type QmpFinish struct {
     success bool
     reason  map[string]interface{}
     callback QemuEvent
 }
-func (qmp *QmpFinish) MessageType() uint { return QMP_FINISH }
+func (qmp *QmpFinish) MessageType() int { return QMP_FINISH }
 
 type QmpCommand struct {
     Execute string `json:"execute"`
@@ -51,10 +52,10 @@ type QmpCommand struct {
 }
 
 type QmpResult struct { result map[string]interface{} }
-func (qmp *QmpResult) MessageType() uint { return QMP_RESULT }
+func (qmp *QmpResult) MessageType() int { return QMP_RESULT }
 
 type QmpError struct { cause map[string]interface{} }
-func (qmp *QmpError) MessageType() uint { return QMP_ERROR }
+func (qmp *QmpError) MessageType() int { return QMP_ERROR }
 
 type QmpEvent struct {
     event       string
@@ -62,8 +63,8 @@ type QmpEvent struct {
     data        map[string]interface{}
 }
 
-func (qmp *QmpEvent) MessageType() uint { return QMP_EVENT }
-func (qmp *QmpEvent) Event() uint { return EVENT_QMP_EVENT }
+func (qmp *QmpEvent) MessageType() int { return QMP_EVENT }
+func (qmp *QmpEvent) Event() int { return EVENT_QMP_EVENT }
 
 func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
     ts := genericGetField(msg, "timestamp")
@@ -87,7 +88,7 @@ func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
     }
 }
 
-func genericGetField(msg map[string]interface{}, field string) *interface{} {
+func genericGetField(msg map[string]interface{}, field string) interface{} {
     if v,ok := msg[field]; ok {
         return &v
     }
@@ -174,7 +175,7 @@ func qmpInit(s *net.UnixListener) (*net.UnixConn, error) {
         return conn,nil
     }
 
-    return nil, "handshake failed"
+    return nil, fmt.Errorf("handshake failed")
 }
 
 func scsiId2Name(id int) string {
@@ -187,14 +188,14 @@ func scsiId2Name(id int) string {
 
 func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format string, id int) *QmpSession {
     commands := make([]QmpCommand, 2)
-    commands[0] = &QmpCommand{
+    commands[0] = QmpCommand{
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
             filename + ",if=none,id=" + "scsi-disk0" + ",format" + format + ",cache=writeback",
         },
     }
-    commands[1] = &QmpCommand{
+    commands[1] = QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
             "driver":"scsi-hd","bus":"scsi0","scsi-id":id,
@@ -250,7 +251,7 @@ func qmpHandler(ctx *QemuContext) {
     go qmpReceiver(ctx.qmp, conn)
 
     for {
-        msg := <- ctx.qmp
+        msg := <-ctx.qmp
         switch msg.MessageType() {
         case QMP_SESSION:
             buf = append(buf, msg.(*QmpSession))
