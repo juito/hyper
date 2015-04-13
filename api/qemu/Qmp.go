@@ -34,7 +34,7 @@ type QmpInternalError struct { cause string}
 func (qmp *QmpInternalError) MessageType() int { return QMP_INTERNAL_ERROR }
 
 type QmpSession struct {
-    commands []QmpCommand
+    commands []*QmpCommand
     callback QemuEvent
 }
 func (qmp *QmpCommand) MessageType() int { return QMP_SESSION }
@@ -187,19 +187,19 @@ func scsiId2Name(id int) string {
 }
 
 func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format string, id int) *QmpSession {
-    commands := make([]QmpCommand, 2)
-    commands[0] = QmpCommand{
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=none,id=" + "scsi-disk0" + ",format" + format + ",cache=writeback",
+            filename + ",if=none,id=" + "scsi-disk" + id + ",format" + format + ",cache=writeback",
         },
     }
     commands[1] = QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
             "driver":"scsi-hd","bus":"scsi0","scsi-id":id,
-            "drive":"scsi-disk0","id":"scsi-disk0",
+            "drive":"scsi-disk0","id": "scsi-disk" + id,
         },
     }
     devName := scsiId2Name(id)
@@ -213,11 +213,39 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
     }
 }
 
+func newNetworkAddSession(ctx *QemuContext, addr int) *QmpSession {
+    busAddr := fmt.Sprintf("0x%x", addr)
+    devId := "hostnet-" + busAddr
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "netdev_add",
+        Arguments: map[string]interface{}{
+            "type":"tap","id":devId,"script":"no",
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute: "device_add",
+        Arguments: map[string]interface{}{
+            "driver":"virtio-net-pci","netdev":devId,"id":"net-" + busAddr,"bus":"pci.0","addr":busAddr,
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+        callback: nil,
+    }
+}
+
 func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpSession, feedback chan QmpInteraction) {
     for _,cmd := range session.commands {
-        msg,err := json.Marshal(cmd)
+        msg,err := json.Marshal(*cmd)
         if err != nil {
-            handler <- nil
+            handler <- &QmpFinish{
+                success: false,
+                reason: map[string]interface{}{
+                    "error": "cannot marshal command",
+                },
+                callback: session.callback,
+            }
             return
         }
         conn.Write(msg)
@@ -227,13 +255,28 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
             case QMP_RESULT:
             //success
             case QMP_ERROR:
-            //fail
+            handler <- &QmpFinish{
+                success: false,
+                reason: res.(*QmpError).cause,
+                callback: session.callback,
+            }
             default:
-            handler <- nil
+            response,_ := json.Marshal(*res)
+            handler <- &QmpFinish{
+                success: false,
+                reason: map[string]interface{}{
+                    "error": "unknown received message type",
+                    "response": response,
+                },
+                callback: session.callback,
+            }
             return
         }
     }
-    handler <- nil
+    handler <- &QmpFinish{
+        success: true,
+        callback: session.callback,
+    }
     return
 }
 
