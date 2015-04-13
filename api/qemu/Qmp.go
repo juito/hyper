@@ -27,23 +27,23 @@ type QmpInteraction interface {
 }
 
 type QmpQuit struct{}
-func (qmp *QmpQuit) MessageType(){ return QMP_QUIT }
+func (qmp *QmpQuit) MessageType() uint { return QMP_QUIT }
 
 type QmpInternalError struct { cause string}
-func (qmp *QmpInternalError) MessageType(){ return QMP_INTERNAL_ERROR }
+func (qmp *QmpInternalError) MessageType() uint { return QMP_INTERNAL_ERROR }
 
 type QmpSession struct {
     commands []QmpCommand
     callback QemuEvent
 }
-func (qmp *QmpCommand) MessageType(){ return QMP_SESSION }
+func (qmp *QmpCommand) MessageType() uint { return QMP_SESSION }
 
 type QmpFinish struct {
     success bool
     reason  map[string]interface{}
     callback QemuEvent
 }
-func (qmp *QmpFinish) MessageType(){ return QMP_FINISH }
+func (qmp *QmpFinish) MessageType() uint { return QMP_FINISH }
 
 type QmpCommand struct {
     Execute string `json:"execute"`
@@ -51,10 +51,10 @@ type QmpCommand struct {
 }
 
 type QmpResult struct { result map[string]interface{} }
-func (qmp *QmpResult) MessageType(){ return QMP_RESULT }
+func (qmp *QmpResult) MessageType() uint { return QMP_RESULT }
 
 type QmpError struct { cause map[string]interface{} }
-func (qmp *QmpError) MessageType(){ return QMP_ERROR }
+func (qmp *QmpError) MessageType() uint { return QMP_ERROR }
 
 type QmpEvent struct {
     event       string
@@ -62,8 +62,8 @@ type QmpEvent struct {
     data        map[string]interface{}
 }
 
-func (qmp *QmpEvent) MessageType(){ return QMP_EVENT }
-func (qmp *QmpEvent) Event(){ return EVENT_QMP_EVENT }
+func (qmp *QmpEvent) MessageType() uint { return QMP_EVENT }
+func (qmp *QmpEvent) Event() uint { return EVENT_QMP_EVENT }
 
 func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
     ts := genericGetField(msg, "timestamp")

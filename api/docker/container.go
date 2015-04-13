@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"fmt"
 	"encoding/json"
 )
 
@@ -59,12 +58,12 @@ type ConfigJSON struct {
 
 func (cli *DockerCli) GetContainerInfo(args ...string) (*ConfigJSON, error) {
 	containerId := args[0]
-	body, _, err := readBody(cli.call("Get", "/container/"+containerId+"/json", nil, nil))
+	body, _, err := readBody(cli.Call("Get", "/container/"+containerId+"/json", nil, nil))
 	if err != nil {
 		return nil, err
 	}
 	var jsonResponse ConfigJSON
-	if err := json.Unmarshal(body, &jsonResponse); err != nil
+	if err := json.Unmarshal(body, &jsonResponse); err != nil {
 		return nil, err
 	}
 
