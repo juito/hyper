@@ -62,9 +62,7 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 
 	os.Setenv("TMPDIR", "/var/tmp/dvm/")
 
-	// get the canonical path to the Docker root directory
-	var realRoot string
-	realRoot = "/var/run/dvm/"
+	var realRoot = "/var/run/dvm/"
 	// Create the root directory if it doesn't exists
 	if err := os.MkdirAll(realRoot, 0700); err != nil && !os.IsExist(err) {
 		return nil, err

@@ -92,7 +92,7 @@ func ProcessPodBytes(body []byte) (*UserPod, error) {
 
     // we need to validate the given POD file
     if userPod.Name == "" {
-        userPod.Name = randStr(10, "alphanum")
+        userPod.Name = RandStr(10, "alphanum")
     }
 
     if userPod.Resource.Vcpu == 0 {
@@ -119,7 +119,7 @@ func ProcessPodBytes(body []byte) (*UserPod, error) {
     return &userPod, nil
 }
 
-func randStr(strSize int, randType string) string {
+func RandStr(strSize int, randType string) string {
     var dictionary string
     if randType == "alphanum" {
         dictionary = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
