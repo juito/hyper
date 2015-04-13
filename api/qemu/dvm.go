@@ -7,7 +7,7 @@ import (
 )
 
 
-func CreateContainer(userPod *pod.UserPod, sharedDir string) (string, error) {
+func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedChan chan ContainerCreatedEvent, volReadyChan chan VolumeReadyEvent) (string, error) {
     var (
         proto = "unix"
         addr = "/var/run/docker.sock"
@@ -121,8 +121,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string) (string, error) {
                 Cmd, jsonResponse.Config.Cmd,
                 Envs, env,
             }
-            containerCreateChan := make(chan ContainerCreatedEvent)
-            containerCreateChan <- containerCreateEvent
+            containerCreatedChan <- containerCreateEvent
 		} else {
 			return "", fmt.Errorf("AN error encountered during creating container!\n")
 		}
@@ -149,18 +148,17 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string) (string, error) {
 				} else {
 					fscmd, err := exec.LookPath("mkfs.xfs")
 				}
-				makeFsCmd := exec.Command(fscmd, path.Join("/dev/mapper/", volName)
+				makeFsCmd := exec.Command(fscmd, path.Join("/dev/mapper/", volName))
 				if _, err := makeFsCmd.Output(); err != nil {
 					return "", err
 				}
-				volChan := make(chan VolumeReadyEvent)
 				myVolReadyEvent := &VolumeReadyEvent {
 					Name: v.Name,
 					Filepath: path.Join("/dev/mapper/", volName),
 					Fstype: fstype,
 					Format: "raw",
 				}
-				volChan <- myVolReadyEvent
+				volReadyChan <- myVolReadyEvent
 
 			} else if storageDriver == "aufs" {
 				// TODO
