@@ -30,49 +30,12 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 		fstype string
 		poolName string
 		devPrefix string
+		devFullName string
+		storageDriver string
+		mountSharedDir string
+		containerId string
     )
-    var dockerCli = docker.NewDockerCli("", proto, addr, nil)
-
-	body, _, err := cli.SendCmdCreate(imgName)
-	if err != nil {
-		return "", err
-	}
-	outInfo := engine.NewOutput()
-	remoteDaemonInfo, err := outInfo.AddEnv()
-	if err != nil {
-		return "", err
-	}
-	if _, err := outInfo.Write(body); err != nil {
-		return "", fmt.Errorf("Error while reading remote info!\n")
-	}
-	outInfo.Close()
-	storageDriver := remoteDaemonInfo.Get("Driver")
-	if storageDriver == "devicemapper" {
-		if remoteInfo.Exists("DriverStatus") {
-			var driverStatus [][2]string
-			if err := remoteInfo.GetJson("DriverStatus", &driverStatus); err != nil {
-				return err
-			}
-			for _, pair := range driverStatus {
-				if pair[0] == "Pool Name" {
-					poolName = pair[1]
-					break
-				}
-				if pair[0] == "Backing Filesystem" {
-					if strings.Contains(pair[1], "ext") {
-						fstype = "ext4"
-					} else if strings.Contains(pair[1], "xfs") {
-						fstype = "xfs"
-					} else {
-						fstype = "dir"
-					}
-				}
-			}
-		}
-		devPrefix = poolName[:strings.Index("-pool")]
-	} else if storageDriver == "aufs" {
-		// TODO
-	}
+    var cli = docker.NewDockerCli("", proto, addr, nil)
 
 	// Process the 'Files' section
 	files := make(map[string](pod.UserFile))
@@ -97,17 +60,41 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 		}
 		out.Close()
 
-		v := &engine.Env{}
-		v.SetJson("ID", daemon.ID)
 		containerId := remoteInfo.Get("Id")
+		storageDriver := remoteInfo.Get("Driver")
+		if storageDriver == "devicemapper" {
+			if remoteInfo.Exists("DriverStatus") {
+				var driverStatus [][2]string
+				if err := remoteInfo.GetJson("DriverStatus", &driverStatus); err != nil {
+					return "", err
+				}
+				for _, pair := range driverStatus {
+					if pair[0] == "Pool Name" {
+						poolName = pair[1]
+						break
+					}
+					if pair[0] == "Backing Filesystem" {
+						if strings.Contains(pair[1], "ext") {
+							fstype = "ext4"
+						} else if strings.Contains(pair[1], "xfs") {
+							fstype = "xfs"
+						} else {
+							fstype = "dir"
+						}
+					}
+				}
+			}
+			devPrefix = poolName[:strings.Index(poolName, "-pool")]
+		} else if storageDriver == "aufs" {
+			// TODO
+		}
+
 		if containerId != "" {
-			v.Set("ContainerID", containerId)
 			fmt.Printf("The ContainerID is %s\n", containerId)
 			var jsonResponse docker.ConfigJSON
 			if jsonResponse, err := cli.GetContainerInfo(containerId); err != nil {
 				return "", err
 			}
-
 
 			var rootPath = "/var/lib/docker/devicemapper/"
 			//var targetPath = path.Join("/var/run/dvm/", daemon.ID, containerId)
@@ -124,18 +111,18 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 			}
 			devFullName = fmt.Sprintf("/dev/mapper/%s-%s", devPrefix, containerId)
 			env := make(map[string]string)
-			for _, v := range jsonResponse.Config.Envs {
+			for _, v := range jsonResponse.Config.Env {
 				env[v[:strings.Index(v, "=")]] = v[strings.Index(v, "=")+1:]
 			}
             containerCreateEvent := &ContainerCreatedEvent {
-                Index, i+1,
-                Id, containerId,
-                Rootfs, "/rootfs",
-                Images, devFullName,
-                Fstype, fstype,
-                Workdir, jsonResponse.Config.WorkingDir,
-                Cmd, jsonResponse.Config.Cmd,
-                Envs, env,
+                Index: uint(i+1),
+                Id: containerId,
+                Rootfs: "/rootfs",
+                Image: devFullName,
+                Fstype: fstype,
+                Workdir: jsonResponse.Config.WorkingDir,
+                Cmd: jsonResponse.Config.Cmd,
+                Envs: env,
             }
             containerCreatedChan <- containerCreateEvent
 		} else {
@@ -187,14 +174,13 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 			if err := syscall.Mount(v.Source, path.Join(sharedDir, mountSharedDir), fstype, flags, "--bind"); err != nil {
 				return "", nil
 			}
-			volChan := make(chan VolumeReadyEvent)
 			myVolReadyEvent := &VolumeReadyEvent {
 				Name: v.Name,
 				Filepath: mountSharedDir,
 				Fstype: "dir",
 				Format: "",
 			}
-			volChan <- myVolReadyEvent
+			volReadyChan <- myVolReadyEvent
 		}
 	}
 
