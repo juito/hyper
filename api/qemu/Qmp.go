@@ -32,11 +32,23 @@ func (qmp *QmpQuit) MessageType(){ return QMP_QUIT }
 type QmpInternalError struct { cause string}
 func (qmp *QmpInternalError) MessageType(){ return QMP_INTERNAL_ERROR }
 
+type QmpSession struct {
+    commands []QmpCommand
+    callback QemuEvent
+}
+func (qmp *QmpCommand) MessageType(){ return QMP_SESSION }
+
+type QmpFinish struct {
+    success bool
+    reason  map[string]interface{}
+    callback QemuEvent
+}
+func (qmp *QmpFinish) MessageType(){ return QMP_FINISH }
+
 type QmpCommand struct {
     Execute string `json:"execute"`
     Arguments map[string]interface{} `json:"arguments,omitempty"`
 }
-func (qmp *QmpCommand) MessageType(){ return QMP_COMMAND }
 
 type QmpResult struct { result map[string]interface{} }
 func (qmp *QmpResult) MessageType(){ return QMP_RESULT }
@@ -165,23 +177,91 @@ func qmpInit(s *net.UnixListener) (*net.UnixConn, error) {
     return nil, "handshake failed"
 }
 
-func qmpHandler(ctx QemuContext) {
+func newDiskAddSession(ctx *QemuContext, filename, format string, addr int) *QmpSession {
+    commands := make([]QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "human-monitor-command",
+        Arguments: map[string]interface{}{
+            "command-line": "drive_add dummy file=" +
+            filename + ",if=none,id=" + "drive-virtio-disk0,format=" + format,
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute: "device_add",
+        Arguments: map[string]interface{}{
+            "driver":"virtio-blk-pci", "scsi":"off", "bus":"pci.0",
+            "addr":"0xb","drive":"drive-virtio-disk0","id":"virtio-disk0",
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+    }
+//{"execute":"device_add","arguments":{"drive":"drive-virtio-disk0","id":"virtio-disk0"}}
+}
+
+func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpSession, feedback chan QmpInteraction) {
+    for _,cmd := range session.commands {
+        msg,err := json.Marshal(cmd)
+        if err != nil {
+            handler <- nil
+            return
+        }
+        conn.Write(msg)
+
+        res := <- feedback
+        switch res.MessageType() {
+            case QMP_RESULT:
+            //success
+            case QMP_ERROR:
+            //fail
+            default:
+            handler <- nil
+            return
+        }
+    }
+    handler <- nil
+    return
+}
+
+func qmpHandler(ctx *QemuContext) {
     conn,err := qmpInit(ctx.qmpSock)
     if err != nil {
         //should send back to hub
         return
     }
+
+    buf := make([]*QmpSession)
+    res := make(chan QmpInteraction, 128)
+
     //routine for get message
     go qmpReceiver(ctx.qmp, conn)
+
     for {
         msg := <- ctx.qmp
         switch msg.MessageType() {
-        case QMP_COMMAND:
+        case QMP_SESSION:
+            buf = append(buf, msg.(*QmpSession))
+            if len(buf) == 1 {
+                go qmpCommander(ctx.qmp, conn, msg.(*QmpSession), res)
+            }
+        case QMP_FINISH:
+            buf = buf[1:]
+            if len(buf) > 0 {
+                go qmpCommander(ctx.qmp, conn, buf[0], res)
+            }
+            r := msg.(*QmpFinish)
+            if r.success {
+                ctx.hub <- r.callback
+            } else {
+                // TODO: fail...
+            }
         case QMP_RESULT:
+            res <- msg
         case QMP_ERROR:
+            res <- msg
         case QMP_EVENT:
-            ev := QmpEvent(*msg)
-            ctx.hub <- &ev
+            ev := msg.(*QmpEvent)
+            ctx.hub <- ev
             if ev.event == QMP_EVENT_SHUTDOWN {
                 return
             }
