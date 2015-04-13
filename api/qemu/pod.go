@@ -35,12 +35,13 @@ type VmContainer struct {
     Id      string `json:"id"`
     Rootfs  string `json:"rootfs"`
     Fstype  string `json:"fstype"`
+    ImageType string `json:"imageType"`
     Images  []string `json:"images"`
     Volumes []VmVolumeDescriptor `json:"volumes"`
     Fsmap   []VmFsmapDescriptor `json:"fsmap"`
     Tty     string `json:"tty"`
     Workdir string `json:"workdir"`
-    Cmd     string `json:"cmd"`
+    Cmd     []string `json:"cmd"`
     Envs    []VmEnvironmentVar `json:"envs"`
     RestartPolicy   string `json:"restartPolicy"`
 }
