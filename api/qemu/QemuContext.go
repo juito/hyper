@@ -14,6 +14,7 @@ type QemuContext struct {
     cpu     int
     memory  int
     pciAddr int  //next available pci addr for pci hotplug
+    scsiId  int  //next available scsi id for scsi hotplug
     kernel  string
     initrd  string
 
@@ -107,6 +108,14 @@ func newProcessingList() *processingList{
         deleting:   newProcessingMap(),
         finished:   newProcessingMap(),
     }
+}
+
+func (ctx* QemuContext) nextScsiId() int {
+    ctx.lock.Lock()
+    id := ctx.scsiId
+    ctx.scsiId++
+    ctx.lock.Unlock()
+    return id
 }
 
 func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {

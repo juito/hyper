@@ -6,6 +6,7 @@ import (
     "net"
     "strconv"
     "dvm/api/pod"
+    "encoding/json"
 )
 
 // helpers
@@ -17,15 +18,16 @@ func cleanup(op recoverOp) {
 
 // Message
 type VmMessage struct {
+    head    [8]byte
     message []byte
 }
 
-func newVmMessage(m string) *VmMessage {
-    msg := &VmMessage{}
-    msg.message = make([]byte, len(m) +  9)
-    binary.BigEndian.PutUint32(msg.message[:], uint32(65))
-    binary.BigEndian.PutUint32(msg.message[4:], uint32(len(m)))
-    copy(msg.message[8:], m)
+func newVmMessage(t uint32, m []byte) *VmMessage {
+    msg := &VmMessage{
+        message: m,
+    }
+    binary.BigEndian.PutUint32(msg.head[:], uint32(t))
+    binary.BigEndian.PutUint32(msg.head[4:], uint32(len(m)))
     return msg
 }
 
@@ -144,6 +146,15 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     //call create volumes
 }
 
+func runPod(ctx *QemuContext) {
+    pod,err := json.Marshal(*ctx.vmSpec)
+    if err != nil {
+        //TODO: fail exit
+        return
+    }
+    ctx.vm <- newVmMessage(0, pod)
+}
+
 // state machine
 
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
@@ -160,26 +171,43 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
 func stateInit(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
-        case EVENT_INIT_CONNECTED:
-            if InitConnectedEvent(*ev).conn != nil {
-                go waitCmdToInit(ctx, ev.(*InitConnectedEvent).conn)
-            } else {
-                //
-            }
-        case COMMAND_RUN_POD:
-            go prepareDevice(ctx, ev.(*RunPodCommand).Spec)
-        case EVENT_CONTAINER_ADD:
-            needInserts := ctx.containerCreated(ev.(*ContainerCreatedEvent))
-            if len(needInserts) != 0 {
-
-            } else if ctx.deviceReady() {
-
-            }
+            case EVENT_INIT_CONNECTED:
+                if InitConnectedEvent(*ev).conn != nil {
+                    go waitCmdToInit(ctx, ev.(*InitConnectedEvent).conn)
+                } else {
+                    // TODO: fail exit
+                }
+            case COMMAND_RUN_POD:
+                go prepareDevice(ctx, ev.(*RunPodCommand).Spec)
+            case EVENT_CONTAINER_ADD:
+                info := ev.(*ContainerCreatedEvent)
+                needInsert := ctx.containerCreated(info)
+                if needInsert {
+                    sid := ctx.nextScsiId()
+                    ctx.qmp <- newDiskAddSession(ctx, info.Image, "image", info.Image, "raw", sid)
+                } else if ctx.deviceReady() {
+                    runPod(ctx)
+                }
+            case EVENT_VOLUME_ADD:
+                info := ev.(*VolumeReadyEvent)
+                needInsert := ctx.volumeReady(info)
+                if needInsert {
+                    sid := ctx.nextScsiId()
+                    ctx.qmp <- newDiskAddSession(ctx, info.Name, "volume", info.Filepath, info.Format, sid)
+                } else if ctx.deviceReady() {
+                    runPod(ctx)
+                }
+            case EVENT_BLOCK_INSERTED:
+                info := ev.(*BlockdevInsertedEvent)
+                ctx.blockdevInserted(info)
+                if ctx.deviceReady() {
+                    runPod(ctx)
+                }
         }
     }
 }
 
-//func stateInitReady
+//func stateRunning
 
 // main loop
 
