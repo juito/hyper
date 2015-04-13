@@ -177,26 +177,39 @@ func qmpInit(s *net.UnixListener) (*net.UnixConn, error) {
     return nil, "handshake failed"
 }
 
-func newDiskAddSession(ctx *QemuContext, filename, format string, addr int) *QmpSession {
+func scsiId2Name(id int) string {
+    var ch byte= 'a' + byte(id%26)
+    if id >= 26 {
+        return scsiId2Name(id/26 - 1) + string(ch)
+    }
+    return "sd" + string(ch)
+}
+
+func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format string, id int) *QmpSession {
     commands := make([]QmpCommand, 2)
     commands[0] = &QmpCommand{
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
-            "command-line": "drive_add dummy file=" +
-            filename + ",if=none,id=" + "drive-virtio-disk0,format=" + format,
+            "command-line":"drive_add dummy file=" +
+            filename + ",if=none,id=" + "scsi-disk0" + ",format" + format + ",cache=writeback",
         },
     }
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"virtio-blk-pci", "scsi":"off", "bus":"pci.0",
-            "addr":"0xb","drive":"drive-virtio-disk0","id":"virtio-disk0",
+            "driver":"scsi-hd","bus":"scsi0","scsi-id":id,
+            "drive":"scsi-disk0","id":"scsi-disk0",
         },
     }
+    devName := scsiId2Name(id)
     return &QmpSession{
         commands: commands,
+        callback: &BlockdevInsertedEvent{
+            Name: name,
+            SourceType: sourceType,
+            DeviceName: devName,
+        },
     }
-//{"execute":"device_add","arguments":{"drive":"drive-virtio-disk0","id":"virtio-disk0"}}
 }
 
 func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpSession, feedback chan QmpInteraction) {
