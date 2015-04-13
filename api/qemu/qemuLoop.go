@@ -93,7 +93,7 @@ func launchQemu(ctx *QemuContext) {
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     InitDeviceContext(ctx,spec)
-    go CreateContainer(spec, ctx.shareDir)
+    go CreateContainer(spec, ctx.shareDir, ctx.hub)
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
         sid := ctx.nextScsiId()
