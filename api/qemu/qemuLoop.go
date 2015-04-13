@@ -1,7 +1,6 @@
 package qemu
 
 import (
-    "encoding/binary"
     "os/exec"
     "net"
     "strconv"
@@ -14,21 +13,6 @@ type recoverOp func()
 
 func cleanup(op recoverOp) {
     if err := recover(); err != nil { op() }
-}
-
-// Message
-type VmMessage struct {
-    head    [8]byte
-    message []byte
-}
-
-func newVmMessage(t uint32, m []byte) *VmMessage {
-    msg := &VmMessage{
-        message: m,
-    }
-    binary.BigEndian.PutUint32(msg.head[:], uint32(t))
-    binary.BigEndian.PutUint32(msg.head[4:], uint32(len(m)))
-    return msg
 }
 
 // Event messages for chan-ctrl
@@ -47,6 +31,10 @@ type InitConnectedEvent struct {
 
 type RunPodCommand struct {
     Spec *pod.UserPod
+}
+
+type CommandAck struct {
+    msg []byte
 }
 
 type ContainerCreatedEvent struct {
@@ -80,6 +68,7 @@ func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
+func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 
 // routines:
 
@@ -102,47 +91,14 @@ func launchQemu(ctx *QemuContext) {
     ctx.hub <- &QemuExitEvent{message:"qemu exit with " + strconv.Itoa(err)}
 }
 
-func waitInitReady(ctx *QemuContext) {
-    buf := make([]byte, 512)
-    for {
-        conn, err := ctx.dvmSock.AcceptUnix()
-        if err != nil {
-            ctx.hub <- &InitConnectedEvent{conn:nil}
-            return
-        }
-
-        connected := true
-
-        for connected {
-            nr, err := conn.Read(buf)
-            if err != nil {
-                connected = false
-            } else if nr == 4 {
-                msg := binary.BigEndian.Uint32(buf[:4])
-                if msg == 0 {
-                    ctx.hub <- &InitConnectedEvent{conn:conn}
-                    return
-                }
-            } else {
-                connected = false
-                close(conn)
-            }
-        }
-
-    }
-}
-
-func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
-    for {
-        cmd := <- ctx.vm
-        init.Write(cmd.message)
-        //read any response?
-    }
-}
-
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     InitDeviceContext(ctx,spec)
-    //call create containers
+    go CreateContainer(spec, ctx.shareDir)
+    for blk,_ := range ctx.progress.adding.blockdevs {
+        info := ctx.devices.volumeMap[blk]
+        sid := ctx.nextScsiId()
+        ctx.qmp <- newDiskAddSession(ctx, info.info.name, "volume", info.info.filename, info.info.format, sid)
+    }
     //call create volumes
 }
 
@@ -156,7 +112,6 @@ func runPod(ctx *QemuContext) {
 }
 
 // state machine
-
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
@@ -178,7 +133,9 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     // TODO: fail exit
                 }
             case COMMAND_RUN_POD:
-                go prepareDevice(ctx, ev.(*RunPodCommand).Spec)
+                prepareDevice(ctx, ev.(*RunPodCommand).Spec)
+            case COMMAND_ACK:
+                println("run scucess")
             case EVENT_CONTAINER_ADD:
                 info := ev.(*ContainerCreatedEvent)
                 needInsert := ctx.containerCreated(info)
