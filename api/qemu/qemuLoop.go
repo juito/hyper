@@ -51,23 +51,19 @@ type ContainerCreatedEvent struct {
     Index   uint
     Id      string
     Rootfs  string
-    Image   []string
+    Image   string          // if fstype is `dir`, this should be a path relative to share_dir
+                            // which described the mounted aufs or overlayfs dir.
     Fstype  string
     Workdir string
     Cmd     []string
     Envs    map[string]string
 }
 
-type VolumeCreatedEvent struct {
-    Name        string
-    Filename    string
-    Fstype      string
-    Format      string
-}
-
-type FsmapBoundEvent struct {
-    Name        string
-    Path        string  // path relative to share dir
+type VolumeReadyEvent struct {
+    Name        string      //volumen name in spec
+    Filepath    string      //block dev absolute path, or dir path relative to share dir
+    Fstype      string      //"xfs", "ext4" etc. for block dev, or "dir" for dir path
+    Format      string      //"raw" (or "qcow2") for volume, no meaning for dir path
 }
 
 type BlockdevInsertedEvent struct {
@@ -80,8 +76,7 @@ func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
-func (qe* VolumeCreatedEvent)       Event() int { return EVENT_VOLUME_ADD }
-func (qe* FsmapBoundEvent)          Event() int { return EVENT_PATH_BOUND }
+func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
 
 // routines:

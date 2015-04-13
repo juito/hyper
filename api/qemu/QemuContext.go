@@ -42,9 +42,8 @@ type QemuContext struct {
 }
 
 type deviceMap struct {
-    imageMap map[string]*imageInfo
-    volumeMap map[string]*volumeInfo
-    fsmapMap map[string]*fsmapInfo
+    imageMap   [string]*imageInfo
+    volumeMap   map[string]*volumeInfo
 }
 
 type blockDescriptor struct {
@@ -57,21 +56,15 @@ type blockDescriptor struct {
 
 type imageInfo struct {
     info        *blockDescriptor
-    pos         imagePosition
+    pos         uint
 }
 
 type volumeInfo struct {
     info        *blockDescriptor
     pos         volumePosition
+    readOnly    map[uint]bool
 }
 
-type fsmapInfo struct {
-    name        string
-    dir         string
-    pos         fsmapPosition
-}
-
-type imagePosition map[uint]uint        //containerIdx -> imageIdx
 type volumePosition map[uint]string     //containerIdx -> mpoint
 type fsmapPosition map[uint]string      //containerIdx -> mpoint
 
@@ -79,7 +72,6 @@ func newDeviceMap() *deviceMap {
     return &deviceMap{
         imageMap:   make(map[string]*imageInfo),
         volumeMap:  make(map[string]*volumeInfo),
-        fsmapMap:   make(map[string]*fsmapInfo),
     }
 }
 
@@ -93,11 +85,10 @@ type processingMap struct {
     containers  map[uint]bool
     volumes     map[string]bool
     blockdevs   map[string]bool
-    fsmap       map[string]bool
 }
 
 func (pm *processingMap) isEmpty() bool {
-    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.fsmap == 0)
+    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0
 }
 
 type stateHandler func(ctx *QemuContext, event QemuEvent)
@@ -107,7 +98,6 @@ func newProcessingMap() *processingMap{
         containers: make(map[uint]bool),    //to be create, and get images,
         volumes:    make(map[string]bool),  //to be create, and get volume
         blockdevs:  make(map[string]bool),  //to be insert to qemu, both volume and images
-        fsmap:      make(map[string]bool),  //to be bind in share dir
     }
 }
 
@@ -119,11 +109,11 @@ func newProcessingList() *processingList{
     }
 }
 
-func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
+func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
 
-    needInsert := make([]string)
+    needInsert := false
 
     c := &ctx.vmSpec.Containers[info.Index]
     c.Id     = info.Id
@@ -131,7 +121,6 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
     c.Fstype = info.Fstype
     c.Cmd    = info.Cmd
     c.Workdir = info.Workdir
-    c.Images = make([]string, len(info.Images))
     for _,e := range c.Envs {
         if _,ok := info.Envs[e.Env]; ok {
             delete(info.Envs, e.Env)
@@ -141,22 +130,15 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
         c.Envs = append(c.Envs, VmEnvironmentVar{Env:e, Value:v,})
     }
 
-    for i,image := range info.Images {
-        if img,ok := ctx.devices.imageMap[image]; ok {
-            img.pos[info.Index] = i
-        } else {
-            ctx.devices.imageMap[image] = &imageInfo{
-                info: &blockDescriptor{ name: image, filename: image, format:"raw", fstype:info.Fstype, deviceName: nil, },
-                pos: make(map[uint]uint),
-            }
-            ctx.devices.imageMap[image].pos[info.Index] = i
+    if info.Fstype == "dir" {
+        c.Image = info.Image
+    } else {
+        ctx.devices.imageMap[info.Image] = &imageInfo{
+            info: &blockDescriptor{ name: info.Image, filename: info.Image, format:"raw", fstype:info.Fstype, deviceName: nil,},
+            pos: info.Index,
         }
-        if _,ok := ctx.progress.finished.blockdevs[image]; !ok {
-            if _,adding := ctx.progress.adding.blockdevs[image]; !adding {
-                ctx.progress.adding.blockdevs[image] = true
-                needInsert = append(needInsert, image)
-            }
-        }
+        ctx.progress.adding.blockdevs[info.Image] = true
+        needInsert = true
     }
 
     ctx.progress.finished.containers[info.Index] = true
@@ -165,40 +147,36 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) []string {
     return needInsert
 }
 
-func (ctx* QemuContext) volumeCreated(info *VolumeCreatedEvent) {
+func (ctx* QemuContext) volumeReady(info *VolumeReadyEvent) bool {
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
 
+    needInsert := false
+
     vol := ctx.devices.volumeMap[info.Name]
-    vol.info.filename = info.Filename
+    vol.info.filename = info.Filepath
     vol.info.format = info.Format
     vol.info.fstype = info.Fstype
+
+    if info.Fstype != "dir" {
+        ctx.progress.adding.blockdevs[info.Name] = true
+        needInsert = true
+    } else {
+        for i,mount := range vol.pos {
+            ctx.vmSpec.Containers[i].Fsmap = append(ctx.vmSpec.Containers[i].Fsmap, VmFsmapDescriptor{
+                Source: info.Filepath,
+                Path:   mount,
+                ReadOnly: vol.readOnly[i],
+            })
+        }
+    }
 
     ctx.progress.finished.volumes[info.Name] == true
     if _,ok := ctx.progress.adding.volumes[info.Name] ; ok {
         delete(ctx.progress.adding.volumes, info.Name)
     }
-}
 
-func (ctx* QemuContext) pathBound(info *FsmapBoundEvent) {
-    ctx.lock.Lock()
-    defer ctx.lock.Unlock()
-
-    path := ctx.devices.fsmapMap[info.Name]
-    path.dir = info.Path
-
-    for i,mnt := range path.pos {
-        for j,dst := range ctx.vmSpec.Containers[i].Fsmap {
-            if dst.Path == mnt {
-                ctx.vmSpec.Containers[i].Fsmap[j].Source = info.Path
-            }
-        }
-    }
-
-    ctx.progress.finished.fsmap[info.Name] == true
-    if _,ok := ctx.progress.adding.fsmap[info.Name] ; ok {
-        delete(ctx.progress.adding.fsmap, info.Name)
-    }
+    return needInsert
 }
 
 func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
@@ -207,10 +185,8 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
 
     if info.SourceType == "image" {
         image := ctx.devices.imageMap[info.Name]
-        for c,img := range image.pos {
-            ctx.vmSpec.Containers[c].Images[img] = info.DeviceName
-        }
-    } else if info.SourceType = "volume" {
+        ctx.vmSpec.Containers[image.pos].Image = info.DeviceName
+    } else if info.SourceType == "volume" {
         volume := ctx.devices.volumeMap[info.Name]
         volume.info.deviceName = info.DeviceName
         for c,vol := range volume.pos {
@@ -333,7 +309,6 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
                 info: &blockDescriptor{ name: vol.Name, filename: nil, format:nil, fstype:nil, deviceName: nil, },
                 pos:  make(map[uint]string),
             }
-            ctx.progress.adding.volumes[vol.Name] = true
         } else if vol.Driver == "raw" || vol.Driver == "qcow2" {
             isFsmap[vol.Name]    = false
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
@@ -343,11 +318,12 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
             ctx.progress.adding.blockdevs[vol.Name] = true
         } else if vol.Driver == "vfs" {
             isFsmap[vol.Name]    = true
-            ctx.devices.fsmapMap[vol.Name] = &fsmapInfo{
-                name: vol.Name, dir: nil, pos: make(map[uint]string),
+            ctx.devices.volumeMap[vol.Name] = &volumeInfo{
+                info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: nil, },
+                pos:  make(map[uint]string),
             }
-            ctx.progress.adding.fsmap[vol.Name] = true
         }
+        ctx.progress.adding.volumes[vol.Name] = true
     }
 
     containers := make([]VmContainer, len(spec.Containers))
@@ -356,17 +332,8 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
         vols := []VmVolumeDescriptor{}
         fsmap := []VmFsmapDescriptor{}
         for _,v := range container.Volumes {
-            if isFsmap[v.Volume] {
-                fsmap = append(fsmap, VmFsmapDescriptor{
-                    Source: nil,  Path: v.Path, ReadOnly: v.ReadOnly,
-                })
-                ctx.devices.fsmapMap[v.Volume].pos[i] = v.Path
-            } else {
-                vols = append(vols, VmVolumeDescriptor{
-                    Device: nil, Mount:  v.Path, Fstype: "ext4", ReadOnly: v.ReadOnly,
-                })
-                ctx.devices.volumeMap[v.Volume].pos[i] = v.Path
-            }
+            ctx.devices.volumeMap[v.Volume].pos[i] = v.Path
+            ctx.devices.volumeMap[v.Volume].readOnly[i] = v.ReadOnly
         }
 
         envs := make([]VmEnvironmentVar, len(container.Envs))
@@ -375,7 +342,7 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod) {
         }
 
         containers[i] = VmContainer{
-            Id:      nil,   Rootfs: "rootfs", Fstype: "ext4", Images:  nil,
+            Id:      nil,   Rootfs: "rootfs", Fstype: "ext4", Image:  nil,
             Volumes: vols,  Fsmap:   fsmap,   Tty:     nil,
             Workdir: nil,   Cmd:     nil,     Envs:    envs,
             RestartPolicy: container.RestartPolicy,
