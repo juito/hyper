@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
     "dvm/api/pod"
+	"io/ioutil"
+	"net/url"
 )
 
 
@@ -19,12 +21,12 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 	fmt.Printf("User Pod Name is %s\n", userPod.Name)
 
     // TODO: we need to transfer this data from client to daemon
-	body, err := iouti.ReadFile(jsonFile)
+	body, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
 		return err
 	}
 
-	v = url.Values{}
+	v := url.Values{}
 	v.Set("podArgs", string(body))
 	if _, _, err := readBody(cli.call("POST", "/pod/create"+v.Encode(), nil, nil)); err != nil {
 		return err
