@@ -195,7 +195,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
 
 // main loop
 
-func qemuLoop(dvmId string, hub chan QemuEvent, cpu, memory int) {
+func QemuLoop(dvmId string, hub chan QemuEvent, cpu, memory int) {
     context := initContext(dvmId, hub, cpu, memory)
 
     //launch routines
