@@ -81,7 +81,7 @@ func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
         return &QmpEvent{
             event: genericGetField(msg, "event").(string),
             timestamp: seconds.(uint64) * 1000000 + microseconds.(uint64),
-            data: data,
+            data: data.(map[string]interface{}),
         },nil
     } else {
         return nil,errors.New("QMP Event parse failed")
@@ -170,7 +170,7 @@ func qmpInit(s *net.UnixListener) (*net.UnixConn, error) {
         return nil, err
     }
 
-    res := msg.(map[string]interface{})
+    res := (*msg).(map[string]interface{})
     if _,ok:= res["return"]; ok {
         return conn,nil
     }
@@ -192,14 +192,14 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=none,id=" + "scsi-disk" + id + ",format" + format + ",cache=writeback",
+            filename + ",if=none,id=" + "scsi-disk" + string(id) + ",format" + format + ",cache=writeback",
         },
     }
     commands[1] = QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"scsi-hd","bus":"scsi0","scsi-id":id,
-            "drive":"scsi-disk0","id": "scsi-disk" + id,
+            "driver":"scsi-hd","bus":"scsi0","scsi-id":string(id),
+            "drive":"scsi-disk0","id": "scsi-disk" + string(id),
         },
     }
     devName := scsiId2Name(id)

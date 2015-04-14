@@ -1,7 +1,6 @@
 package qemu
 
 import (
-    "encoding/json"
     "dvm/api/pod"
 )
 
