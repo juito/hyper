@@ -35,7 +35,7 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
             return nil, err
         }
 
-        res = append(res, buf[:nr])
+        res = append(res, buf[:nr]...)
         read = read + nr
 
         if length == 0 && read >= 8 {

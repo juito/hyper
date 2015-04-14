@@ -66,7 +66,7 @@ type BlockdevInsertedEvent struct {
 }
 
 type InterfaceCreated struct {
-    Index       string
+    Index       int
     DeviceName  string
 }
 
@@ -152,7 +152,7 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
         }
         return false
     case COMMAND_SHUTDOWN:
-        ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: make([]byte), }
+        ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
         ctx.Become(stateTerminating)
         return true
     default:
@@ -164,8 +164,9 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
             case EVENT_INIT_CONNECTED:
-                if InitConnectedEvent(*ev).conn != nil {
-                    go waitCmdToInit(ctx, ev.(*InitConnectedEvent).conn)
+                event := ev.(*InitConnectedEvent)
+                if event.conn != nil {
+                    go waitCmdToInit(ctx, event.conn)
                 } else {
                     // TODO: fail exit
                 }
