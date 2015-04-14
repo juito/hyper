@@ -53,6 +53,10 @@ func TestParseSpec(t *testing.T) {
         t.Error("shareDir in vmSpec is ", ctx.vmSpec.ShareDir)
     }
 
+    if ctx.vmSpec.Containers[0].RestartPolicy != "never" {
+        t.Error("Default restartPolicy is ", ctx.vmSpec.Containers[0].RestartPolicy)
+    }
+
     res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
     if err != nil {
         t.Error("vmspec to json failed")

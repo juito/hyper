@@ -419,11 +419,16 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
             envs[j] = VmEnvironmentVar{ Env: e.Env, Value: e.Value,}
         }
 
+        restart := "never"
+        if len(container.RestartPolicy) > 0 {
+            restart = container.RestartPolicy
+        }
+
         containers[i] = VmContainer{
             Id:      "",   Rootfs: "rootfs", Fstype: "ext4", Image:  "",
             Volumes: vols,  Fsmap:   fsmap,   Tty:     "",
             Workdir: "",   Cmd:     nil,     Envs:    envs,
-            RestartPolicy: container.RestartPolicy,
+            RestartPolicy: restart,
         }
     }
 
