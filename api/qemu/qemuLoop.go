@@ -34,6 +34,8 @@ type RunPodCommand struct {
     Spec *pod.UserPod
 }
 
+type ShutdownCommand struct {}
+
 type CommandAck struct {
     reply   uint32
     msg     []byte
@@ -84,6 +86,7 @@ func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
 func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
 func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
+func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 
 // routines:
 
@@ -138,17 +141,21 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     case EVENT_QEMU_EXIT:
         log.Print("Qemu has exit")
         ctx.Close()
-        ctx.Become(nil)
+        ctx.Become(stateCleaningUp)
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.event == QMP_EVENT_SHUTDOWN {
             log.Print("Got QMP shutdown event")
             ctx.Close()
-            ctx.Become(nil)
+            ctx.Become(stateCleaningUp)
             return true
         }
         return false
+    case COMMAND_SHUTDOWN:
+        ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: make([]byte), }
+        ctx.Become(stateTerminating)
+        return true
     default:
         return false
     }
@@ -217,6 +224,29 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
         switch ev.Event() {
             default:
                 log.Print("got event during pod running")
+        }
+    }
+}
+
+func stateTerminating(ctx *QemuContext, ev QemuEvent) {
+    if processed := commonStateHandler(ctx, ev); !processed {
+        switch ev.Event() {
+            case COMMAND_ACK:
+                ack := ev.(*CommandAck)
+                if ack.reply == INIT_SHUTDOWN {
+                    log.Print("Shutting down", string(ack.msg))
+                    ctx.Become(stateRunning)
+                } else {
+                    log.Print("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
+                }
+        }
+    }
+}
+
+func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
+    if processed := commonStateHandler(ctx, ev); !processed {
+        switch ev.Event() {
+            default:
         }
     }
 }
