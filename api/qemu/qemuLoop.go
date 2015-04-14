@@ -90,6 +90,20 @@ func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 
 // routines:
 
+func printDebugOutput(tag string, out io.ReadCloser) {
+    buf := make([]byte, 1024)
+    for {
+        n,err:=out.Read(buf)
+        if err == io.EOF {
+            log.Printf("%s finish", tag)
+            break
+        } else if err != nil {
+            log.Fatal(err)
+        }
+        log.Printf("got %s: %s", tag, string(buf[:n]))
+    }
+}
+
 // launchQemu run qemu and wait it's quit, includes
 func launchQemu(ctx *QemuContext) {
     qemu,err := exec.LookPath("qemu-system-x86_64")
@@ -105,6 +119,14 @@ func launchQemu(ctx *QemuContext) {
         log.Println("Cannot get stderr of qemu")
     }
 
+    stdout, err := cmd.StdoutPipe()
+    if err != nil {
+        log.Println("Cannot get stderr of qemu")
+    }
+
+    go printDebugOutput("stdout", stdout)
+    go printDebugOutput("stderr", stderr)
+
     if err := cmd.Start();err != nil {
         log.Println("try to start qemu failed")
         ctx.hub <- &QemuExitEvent{message:"try to start qemu failed"}
@@ -112,17 +134,6 @@ func launchQemu(ctx *QemuContext) {
     }
 
     log.Println("Waiting for command to finish...")
-    buf := make([]byte, 1024)
-    for {
-        n,err:=stderr.Read(buf)
-        if err == io.EOF {
-            log.Println("stderr finish")
-            break
-        } else if err != nil {
-            log.Fatal(err)
-        }
-        log.Printf("got stderr: %s", string(buf[:n]))
-    }
 
     err = cmd.Wait()
     log.Println("qemu exit with ", err.Error())
