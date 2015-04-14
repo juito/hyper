@@ -57,6 +57,10 @@ func TestParseSpec(t *testing.T) {
         t.Error("Default restartPolicy is ", ctx.vmSpec.Containers[0].RestartPolicy)
     }
 
+    if ctx.vmSpec.Containers[0].Envs[1].Env != "JAVA_HOME" {
+        t.Error("second environment should not be ", ctx.vmSpec.Containers[0].Envs[1].Env)
+    }
+
     res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
     if err != nil {
         t.Error("vmspec to json failed")
@@ -68,6 +72,34 @@ func testJson(key string) string {
     jsons := make(map[string]string)
 
     jsons["basic"] =`{
+    "name": "hostname",
+    "containers" : [{
+        "image": "nginx:latest",
+        "files":  [{
+            "path": "/var/lib/xxx/xxxx",
+            "filename": "filename"
+        }],
+        "envs":  [{
+            "env": "JAVA_OPT",
+            "value": "-XMx=256m"
+        },{
+            "env": "JAVA_HOME",
+            "value": "/usr/local/java"
+        }]
+    }],
+    "resource": {
+        "vcpu": 1,
+        "memory": 128
+    },
+    "files": [{
+        "name": "filename",
+        "encoding": "raw",
+        "uri": "https://s3.amazonaws/bucket/file.conf",
+        "content": ""
+    }],
+    "volumes": []}`
+
+    jsons["with_volumes"] = `{
     "name": "hostname",
     "containers" : [{
         "image": "nginx:latest",
