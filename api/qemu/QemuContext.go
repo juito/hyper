@@ -342,7 +342,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         platformParams = []string{"-machine", "pc-i440fx-2.0,usb=off", "-cpu", "core2duo",}
     }
     return append(platformParams,
-        "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-acpi", "-no-hpet",
+        "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-hpet",
         "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
         "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"panic=1 console=ttyS0\"",
