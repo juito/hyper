@@ -77,15 +77,6 @@ type networkInfo struct {
 }
 
 type volumePosition map[int]string     //containerIdx -> mpoint
-type fsmapPosition map[int]string      //containerIdx -> mpoint
-
-func newDeviceMap() *deviceMap {
-    return &deviceMap{
-        imageMap:   make(map[string]*imageInfo),
-        volumeMap:  make(map[string]*volumeInfo),
-        networkMap: make(map[int]*networkInfo),
-    }
-}
 
 type processingList struct {
     adding      *processingMap
@@ -100,11 +91,15 @@ type processingMap struct {
     networks    map[int]bool
 }
 
-func (pm *processingMap) isEmpty() bool {
-    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.networks) == 0
-}
-
 type stateHandler func(ctx *QemuContext, event QemuEvent)
+
+func newDeviceMap() *deviceMap {
+    return &deviceMap{
+        imageMap:   make(map[string]*imageInfo),
+        volumeMap:  make(map[string]*volumeInfo),
+        networkMap: make(map[int]*networkInfo),
+    }
+}
 
 func newProcessingMap() *processingMap{
     return &processingMap{
@@ -120,6 +115,90 @@ func newProcessingList() *processingList{
         deleting:   newProcessingMap(),
         finished:   newProcessingMap(),
     }
+}
+
+func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
+
+    qmpChannel := make(chan QmpInteraction, 128)
+    vmChannel  := make(chan *DecodedMessage, 128)
+    defer cleanup(func(){ close(qmpChannel);close(vmChannel)})
+
+    //dir and sockets:
+    homeDir := BaseDir + "/" + id + "/"
+    qmpSockName := homeDir + QmpSockName
+    dvmSockName := homeDir + DvmSockName
+    consoleSockName := homeDir + ConsoleSockName
+    shareDir    := homeDir + ShareDir
+
+    err := os.MkdirAll(shareDir, 0755)
+    if err != nil {
+        panic(err)
+    }
+    defer cleanup(func(){os.RemoveAll(homeDir)})
+
+    mkSureNotExist(qmpSockName)
+    mkSureNotExist(dvmSockName)
+    mkSureNotExist(consoleSockName)
+
+    consoleSock,err := net.ListenUnix("unix",  &net.UnixAddr{consoleSockName, "unix"})
+    if err != nil {
+        panic(err)
+    }
+    defer cleanup(func(){consoleSock.Close()})
+
+    qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
+    if err != nil {
+        panic(err)
+    }
+    defer cleanup(func(){qmpSock.Close()})
+
+    dvmSock,err := net.ListenUnix("unix",  &net.UnixAddr{dvmSockName, "unix"})
+    if err != nil {
+        panic(err)
+    }
+    defer cleanup(func(){dvmSock.Close()})
+
+    return &QemuContext{
+        id:         id,
+        cpu:        cpu,
+        memory:     memory,
+        pciAddr:    0x04,
+        kernel:     Kernel,
+        initrd:     Initrd,
+        hub:        hub,
+        qmp:        qmpChannel,
+        vm:         vmChannel,
+        qmpSockName: qmpSockName,
+        dvmSockName: dvmSockName,
+        consoleSockName: consoleSockName,
+        shareDir:   shareDir,
+        qmpSock:    qmpSock,
+        dvmSock:    dvmSock,
+        consoleSock: consoleSock,
+        handler:    stateInit,
+        userSpec:   nil,
+        vmSpec:     nil,
+        devices:    newDeviceMap(),
+        progress:   newProcessingList(),
+        lock:       &sync.Mutex{},
+    }
+}
+
+func mkSureNotExist(filename string) error {
+    if _, err := os.Stat(filename); os.IsNotExist(err) {
+        log.Println("no such file: ", filename)
+        return nil
+    } else if err == nil {
+        log.Println("try to remove exist file", filename)
+        return os.Remove(filename)
+    } else {
+        log.Println("can not state file ", filename)
+        return err
+    }
+}
+
+func (pm *processingMap) isEmpty() bool {
+    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.networks) == 0
 }
 
 func (ctx* QemuContext) nextScsiId() int {
@@ -163,7 +242,8 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
         c.Image = info.Image
     } else {
         ctx.devices.imageMap[info.Image] = &imageInfo{
-            info: &blockDescriptor{ name: info.Image, filename: info.Image, format:"raw", fstype:info.Fstype, deviceName: "",},
+            info: &blockDescriptor{
+                name: info.Image, filename: info.Image, format:"raw", fstype:info.Fstype, deviceName: "",},
             pos: info.Index,
         }
         ctx.progress.adding.blockdevs[info.Image] = true
@@ -250,87 +330,6 @@ func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
 
-func mkSureNotExist(filename string) error {
-    if _, err := os.Stat(filename); os.IsNotExist(err) {
-        log.Println("no such file: ", filename)
-        return nil
-    } else if err == nil {
-        log.Println("try to remove exist file", filename)
-        return os.Remove(filename)
-    } else {
-        log.Println("can not state file ", filename)
-        return err
-    }
-}
-
-func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
-
-    qmpChannel := make(chan QmpInteraction, 128)
-    vmChannel  := make(chan *DecodedMessage, 128)
-    defer cleanup(func(){ close(qmpChannel);close(vmChannel)})
-
-    //dir and sockets:
-    homeDir := BaseDir + "/" + id + "/"
-    qmpSockName := homeDir + QmpSockName
-    dvmSockName := homeDir + DvmSockName
-    consoleSockName := homeDir + ConsoleSockName
-    shareDir    := homeDir + ShareDir
-
-    err := os.MkdirAll(shareDir, 0755)
-    if err != nil {
-        panic(err)
-    }
-    defer cleanup(func(){os.RemoveAll(homeDir)})
-
-    mkSureNotExist(qmpSockName)
-    mkSureNotExist(dvmSockName)
-    mkSureNotExist(consoleSockName)
-
-    consoleSock,err := net.ListenUnix("unix",  &net.UnixAddr{consoleSockName, "unix"})
-    if err != nil {
-        panic(err)
-    }
-    defer cleanup(func(){consoleSock.Close()})
-
-    qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
-    if err != nil {
-        panic(err)
-    }
-    defer cleanup(func(){qmpSock.Close()})
-
-    dvmSock,err := net.ListenUnix("unix",  &net.UnixAddr{dvmSockName, "unix"})
-    if err != nil {
-        panic(err)
-    }
-    defer cleanup(func(){dvmSock.Close()})
-
-    return &QemuContext{
-        id:         id,
-        cpu:        cpu,
-        memory:     memory,
-        pciAddr:    0x04,
-        kernel:     Kernel,
-        initrd:     Initrd,
-        hub:        hub,
-        qmp:        qmpChannel,
-        vm:         vmChannel,
-    //    homeDir:    homeDir,   TODO wehether we need this
-        qmpSockName: qmpSockName,
-        dvmSockName: dvmSockName,
-        consoleSockName: consoleSockName,
-        shareDir:   shareDir,
-        qmpSock:    qmpSock,
-        dvmSock:    dvmSock,
-        consoleSock: consoleSock,
-        handler:    stateInit,
-        userSpec:   nil,
-        vmSpec:     nil,
-        devices:    newDeviceMap(),
-        progress:   newProcessingList(),
-        lock:       &sync.Mutex{},
-    }
-}
-
 func (ctx *QemuContext) Close() {
     close(ctx.qmp)
     close(ctx.vm)
@@ -368,7 +367,7 @@ func (ctx *QemuContext) QemuArguments() []string {
 }
 
 // InitDeviceContext will init device info in context
-func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
+func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
     isFsmap:= make(map[string]bool)
 
     ctx.lock.Lock()
@@ -389,14 +388,16 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
         } else if vol.Driver == "raw" || vol.Driver == "qcow2" {
             isFsmap[vol.Name]    = false
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
-                info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
+                info: &blockDescriptor{
+                    name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
                 pos:  make(map[int]string),
             }
             ctx.progress.adding.blockdevs[vol.Name] = true
         } else if vol.Driver == "vfs" {
             isFsmap[vol.Name]    = true
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
-                info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
+                info: &blockDescriptor{
+                    name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
                 pos:  make(map[int]string),
             }
         }

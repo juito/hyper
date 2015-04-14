@@ -10,7 +10,14 @@ func TestInitContext(t *testing.T) {
     if ctx.id != "vmid" {
         t.Error("id should be vmid, but is ", ctx.id)
     }
+    t.Log("id check finished.")
     ctx.Close()
+}
+
+func TestRemoveSock(t *testing.T) {
+    initContext("vmid", nil, 1, 128)
+    initContext("vmid", nil, 1, 128)
+    t.Log("repeat initiated them.")
 }
 
 func testJson(key string) string {

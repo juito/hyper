@@ -176,7 +176,7 @@ func launchQemu(ctx *QemuContext) {
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     networks := 0
-    InitDeviceContext(ctx,spec, networks)
+    ctx.InitDeviceContext(spec, networks)
     go CreateContainer(spec, ctx.shareDir, ctx.hub)
     if networks > 0 {
         // TODO: go create interfaces here
