@@ -42,7 +42,7 @@ type CommandAck struct {
 }
 
 type ContainerCreatedEvent struct {
-    Index   uint
+    Index   int
     Id      string
     Rootfs  string
     Image   string          // if fstype is `dir`, this should be a path relative to share_dir

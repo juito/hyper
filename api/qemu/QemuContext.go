@@ -45,7 +45,7 @@ type QemuContext struct {
 type deviceMap struct {
     imageMap    map[string]*imageInfo
     volumeMap   map[string]*volumeInfo
-    networkMap  map[uint]*networkInfo
+    networkMap  map[int]*networkInfo
 }
 
 type blockDescriptor struct {
@@ -58,29 +58,29 @@ type blockDescriptor struct {
 
 type imageInfo struct {
     info        *blockDescriptor
-    pos         uint
+    pos         int
 }
 
 type volumeInfo struct {
     info        *blockDescriptor
     pos         volumePosition
-    readOnly    map[uint]bool
+    readOnly    map[int]bool
 }
 
 type networkInfo struct {
-    index   uint
+    index   int
     address int
     device  string
 }
 
-type volumePosition map[uint]string     //containerIdx -> mpoint
-type fsmapPosition map[uint]string      //containerIdx -> mpoint
+type volumePosition map[int]string     //containerIdx -> mpoint
+type fsmapPosition map[int]string      //containerIdx -> mpoint
 
 func newDeviceMap() *deviceMap {
     return &deviceMap{
         imageMap:   make(map[string]*imageInfo),
         volumeMap:  make(map[string]*volumeInfo),
-        networkMap: make(map[uint]*networkInfo),
+        networkMap: make(map[int]*networkInfo),
     }
 }
 
@@ -91,10 +91,10 @@ type processingList struct {
 }
 
 type processingMap struct {
-    containers  map[uint]bool
+    containers  map[int]bool
     volumes     map[string]bool
     blockdevs   map[string]bool
-    networks    map[uint]bool
+    networks    map[int]bool
 }
 
 func (pm *processingMap) isEmpty() bool {
@@ -105,7 +105,7 @@ type stateHandler func(ctx *QemuContext, event QemuEvent)
 
 func newProcessingMap() *processingMap{
     return &processingMap{
-        containers: make(map[uint]bool),    //to be create, and get images,
+        containers: make(map[int]bool),    //to be create, and get images,
         volumes:    make(map[string]bool),  //to be create, and get volume
         blockdevs:  make(map[string]bool),  //to be insert to qemu, both volume and images
     }
@@ -340,7 +340,7 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
     defer ctx.lock.Unlock()
 
     for i:=0; i< networks ; i++ {
-        ctx.progress.adding.networks[uint(i)] = true
+        ctx.progress.adding.networks[i] = true
     }
 
     //classify volumes, and generate device info and progress info
@@ -349,20 +349,20 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
             isFsmap[vol.Name]    = false
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
                 info: &blockDescriptor{ name: vol.Name, filename: "", format:"", fstype:"", deviceName:"", },
-                pos:  make(map[uint]string),
+                pos:  make(map[int]string),
             }
         } else if vol.Driver == "raw" || vol.Driver == "qcow2" {
             isFsmap[vol.Name]    = false
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
                 info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
-                pos:  make(map[uint]string),
+                pos:  make(map[int]string),
             }
             ctx.progress.adding.blockdevs[vol.Name] = true
         } else if vol.Driver == "vfs" {
             isFsmap[vol.Name]    = true
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
                 info: &blockDescriptor{ name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
-                pos:  make(map[uint]string),
+                pos:  make(map[int]string),
             }
         }
         ctx.progress.adding.volumes[vol.Name] = true
@@ -374,8 +374,8 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
         vols := []VmVolumeDescriptor{}
         fsmap := []VmFsmapDescriptor{}
         for _,v := range container.Volumes {
-            ctx.devices.volumeMap[v.Volume].pos[uint(i)] = v.Path
-            ctx.devices.volumeMap[v.Volume].readOnly[uint(i)] = v.ReadOnly
+            ctx.devices.volumeMap[v.Volume].pos[i] = v.Path
+            ctx.devices.volumeMap[v.Volume].readOnly[i] = v.ReadOnly
         }
 
         envs := make([]VmEnvironmentVar, len(container.Envs))
