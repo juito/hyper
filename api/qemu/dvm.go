@@ -91,8 +91,8 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 
 		if containerId != "" {
 			fmt.Printf("The ContainerID is %s\n", containerId)
-			var jsonResponse docker.ConfigJSON
-			if jsonResponse, err := cli.GetContainerInfo(containerId); err != nil {
+			var jsonResponse *docker.ConfigJSON
+			if jsonResponse, err = cli.GetContainerInfo(containerId); err != nil {
 				return "", err
 			}
 
@@ -147,9 +147,9 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 				// Need to make the filesystem on that volume
 				var fscmd string
 				if fstype == "ext4" {
-					fscmd, err := exec.LookPath("mkfs.ext4")
+					fscmd, err = exec.LookPath("mkfs.ext4")
 				} else {
-					fscmd, err := exec.LookPath("mkfs.xfs")
+					fscmd, err = exec.LookPath("mkfs.xfs")
 				}
 				makeFsCmd := exec.Command(fscmd, path.Join("/dev/mapper/", volName))
 				if _, err := makeFsCmd.Output(); err != nil {
