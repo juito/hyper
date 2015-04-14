@@ -7,6 +7,7 @@ import (
     "dvm/api/pod"
     "encoding/json"
     "io"
+    "strings"
 )
 
 // helpers
@@ -112,7 +113,11 @@ func launchQemu(ctx *QemuContext) {
         return
     }
 
-    cmd := exec.Command(qemu, ctx.QemuArguments()...)
+    args := ctx.QemuArguments()
+
+    log.Println("cmdline arguments: ", strings.Join(args, " "))
+
+    cmd := exec.Command(qemu, args...)
 
     stderr,err := cmd.StderrPipe()
     if err != nil {
