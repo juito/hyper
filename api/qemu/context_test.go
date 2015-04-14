@@ -68,6 +68,24 @@ func TestParseSpec(t *testing.T) {
     t.Log(string(res))
 }
 
+func TestParseVolumes(t *testing.T) {
+    ctx := initContext("vmmid", nil, 1, 128)
+
+    spec := pod.UserPod{}
+    err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
+    if err != nil {
+        t.Error("parse json failed ", err.Error())
+    }
+
+    ctx.InitDeviceContext(&spec, 0)
+
+    res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+    if err != nil {
+        t.Error("vmspec to json failed")
+    }
+    t.Log(string(res))
+}
+
 func testJson(key string) string {
     jsons := make(map[string]string)
 
@@ -106,19 +124,64 @@ func testJson(key string) string {
         "files":  [{
             "path": "/var/lib/xxx/xxxx",
             "filename": "filename"
+        }],
+        "volumes": [{
+            "path": "/var/dir1",
+            "volume": "vol1",
+            "readOnly": true
+        },{
+            "path": "/var/dir2",
+            "volume": "vol2",
+            "readOnly": false
+        },{
+            "path": "/var/dir3",
+            "volume": "vol3",
+            "readOnly": false
+        },{
+            "path": "/var/dir4",
+            "volume": "vol4",
+            "readOnly": false
+        },{
+            "path": "/var/dir5",
+            "volume": "vol5",
+            "readOnly": false
+        },{
+            "path": "/var/dir6",
+            "volume": "vol6",
+            "readOnly": false
         }]
     }],
     "resource": {
         "vcpu": 1,
         "memory": 128
     },
-    "files": [{
-        "name": "filename",
-        "encoding": "raw",
-        "uri": "https://s3.amazonaws/bucket/file.conf",
-        "content": ""
-    }],
-    "volumes": []}`
+    "files": [],
+    "volumes": [{
+        "name": "vol1",
+        "source": "",
+        "driver": ""
+    },{
+        "name": "vol2",
+        "source": "/home/whatever",
+        "driver": "vfs"
+    },{
+        "name": "vol3",
+        "source": "/home/what/file",
+        "driver": "raw"
+    },{
+        "name": "vol4",
+        "source": "",
+        "driver": ""
+    },{
+        "name": "vol5",
+        "source": "/home/what/file2",
+        "driver": "vfs"
+    },{
+        "name": "vol6",
+        "source": "/home/what/file3",
+        "driver": "qcow2"
+    }]
+    }`
 
     return jsons[key]
 }
