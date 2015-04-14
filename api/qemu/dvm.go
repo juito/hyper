@@ -23,7 +23,7 @@ type jsonMetadata struct {
 	Initialized bool   `json:"initialized"`
 }
 
-func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedChan chan QemuEvent, volReadyChan chan QemuEvent) (string, error) {
+func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent) (string, error) {
     var (
         proto = "unix"
         addr = "/var/run/docker.sock"
@@ -124,7 +124,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
                 Cmd: jsonResponse.Config.Cmd,
                 Envs: env,
             }
-            containerCreatedChan <- containerCreateEvent
+            hub <- containerCreateEvent
 		} else {
 			return "", fmt.Errorf("AN error encountered during creating container!\n")
 		}
@@ -161,7 +161,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 					Fstype: fstype,
 					Format: "raw",
 				}
-				volReadyChan <- myVolReadyEvent
+				hub <- myVolReadyEvent
 
 			} else if storageDriver == "aufs" {
 				// TODO
@@ -180,7 +180,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 				Fstype: "dir",
 				Format: "",
 			}
-			volReadyChan <- myVolReadyEvent
+			hub <- myVolReadyEvent
 		}
 	}
 
