@@ -340,7 +340,7 @@ func InitDeviceContext(ctx *QemuContext, spec *pod.UserPod, networks int) {
     defer ctx.lock.Unlock()
 
     for i:=0; i< networks ; i++ {
-        ctx.progress.adding.networks[i] = true
+        ctx.progress.adding.networks[uint(i)] = true
     }
 
     //classify volumes, and generate device info and progress info

@@ -72,7 +72,7 @@ func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
         return nil, errors.New("cannot parse timestamp")
     }
 
-    t := (*ts).(map[string]interface{})
+    t := (ts).(map[string]interface{})
     seconds := genericGetField(t, "seconds")
     microseconds := genericGetField(t, "microseconds")
     data := genericGetField(msg, "data")
@@ -90,7 +90,7 @@ func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
 
 func genericGetField(msg map[string]interface{}, field string) interface{} {
     if v,ok := msg[field]; ok {
-        return &v
+        return v
     }
     return nil
 }
@@ -140,7 +140,7 @@ func qmpReceiver(ch chan QmpInteraction, conn *net.UnixConn) {
             return
         }
         ch <- qmp
-        if qmp.MessageType() == QMP_EVENT && QmpEvent(*qmp).event == QMP_EVENT_SHUTDOWN {
+        if qmp.MessageType() == QMP_EVENT && qmp.(*QmpEvent).event == QMP_EVENT_SHUTDOWN {
             return
         }
     }

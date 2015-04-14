@@ -79,15 +79,6 @@ type ContainerInfo struct {
     Cmd     string
 }
 
-func (pod *VmPod) Serialize() (*VmMessage,error) {
-    jv,err := json.Marshal(pod)
-    if err != nil {
-        return nil, err
-    }
-    buf := newVmMessage(jv)
-    return buf,nil
-}
-
 //validate
 // 1. volume name, file name is unique
 // 2. source mount to only one pos in one container

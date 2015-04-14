@@ -70,7 +70,7 @@ type InterfaceCreated struct {
 }
 
 type NetDevInsertedEvent struct {
-    Index       string
+    Index       int
     DeviceName  string
     Address     int
 }
