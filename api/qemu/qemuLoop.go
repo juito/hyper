@@ -6,6 +6,7 @@ import (
     "net"
     "dvm/api/pod"
     "encoding/json"
+    "io"
 )
 
 // helpers
@@ -99,12 +100,32 @@ func launchQemu(ctx *QemuContext) {
 
     cmd := exec.Command(qemu, ctx.QemuArguments()...)
 
+    stderr,err := cmd.StderrPipe()
+    if err != nil {
+        log.Println("Cannot get stderr of qemu")
+    }
+
     if err := cmd.Start();err != nil {
+        log.Println("try to start qemu failed")
         ctx.hub <- &QemuExitEvent{message:"try to start qemu failed"}
         return
     }
 
+    log.Println("Waiting for command to finish...")
+    buf := make([]byte, 1024)
+    for {
+        n,err:=stderr.Read(buf)
+        if err == io.EOF {
+            log.Println("stderr finish")
+            break
+        } else if err != nil {
+            log.Fatal(err)
+        }
+        log.Printf("got stderr: %s", string(buf[:n]))
+    }
+
     err = cmd.Wait()
+    log.Println("qemu exit with ", err.Error())
     ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
 }
 
