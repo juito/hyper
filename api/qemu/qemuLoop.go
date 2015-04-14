@@ -106,7 +106,7 @@ func printDebugOutput(tag string, out io.ReadCloser) {
 }
 
 func waitConsoleOutput(ctx *QemuContext) {
-    buf := make([]byte, 512)
+    buf := make([]byte, 64)
 
     conn, err := ctx.consoleSock.AcceptUnix()
     if err != nil {
@@ -114,6 +114,7 @@ func waitConsoleOutput(ctx *QemuContext) {
         return
     }
 
+    line := []byte{}
     for {
         nr,err := conn.Read(buf)
         if err == io.EOF {
@@ -123,7 +124,12 @@ func waitConsoleOutput(ctx *QemuContext) {
             log.Println("Unhandled error ", err.Error())
             return
         }
-        log.Print("[console] ", string(buf[:nr]))
+
+        line = append(line, buf[:nr])
+        if buf[nr-1] == '\n' || buf[nr-1] == '\r' {
+            log.Print("[console] ", string(buf[:nr]))
+            line = []byte{}
+        }
     }
 }
 
