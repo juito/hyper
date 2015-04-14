@@ -384,6 +384,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
                 info: &blockDescriptor{ name: vol.Name, filename: "", format:"", fstype:"", deviceName:"", },
                 pos:  make(map[int]string),
+                readOnly: make(map[int]bool),
             }
         } else if vol.Driver == "raw" || vol.Driver == "qcow2" {
             isFsmap[vol.Name]    = false
@@ -391,6 +392,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
                 info: &blockDescriptor{
                     name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
                 pos:  make(map[int]string),
+                readOnly: make(map[int]bool),
             }
             ctx.progress.adding.blockdevs[vol.Name] = true
         } else if vol.Driver == "vfs" {
@@ -399,6 +401,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
                 info: &blockDescriptor{
                     name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
                 pos:  make(map[int]string),
+                readOnly: make(map[int]bool),
             }
         }
         ctx.progress.adding.volumes[vol.Name] = true
