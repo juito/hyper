@@ -307,6 +307,8 @@ func (ctx *QemuContext) Close() {
     close(ctx.vm)
     ctx.qmpSock.Close()
     ctx.dvmSock.Close()
+    os.Remove(ctx.dvmSockName)
+    os.Remove(ctx.qmpSockName)
 }
 
 func (ctx *QemuContext) Become(handler stateHandler) {

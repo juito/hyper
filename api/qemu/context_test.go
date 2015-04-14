@@ -10,7 +10,7 @@ func TestInitContext(t *testing.T) {
     if ctx.id != "vmid" {
         t.Error("id should be vmid, but is ", ctx.id)
     }
-
+    ctx.Close()
 }
 
 func testJson(key string) string {
