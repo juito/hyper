@@ -115,7 +115,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, containerCreatedCha
 				env[v[:strings.Index(v, "=")]] = v[strings.Index(v, "=")+1:]
 			}
             containerCreateEvent := &ContainerCreatedEvent {
-                Index: uint(i+1),
+                Index: i+1,
                 Id: containerId,
                 Rootfs: "/rootfs",
                 Image: devFullName,
