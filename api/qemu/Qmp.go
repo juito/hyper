@@ -37,7 +37,7 @@ type QmpSession struct {
     commands []*QmpCommand
     callback QemuEvent
 }
-func (qmp *QmpCommand) MessageType() int { return QMP_SESSION }
+func (qmp *QmpSession) MessageType() int { return QMP_SESSION }
 
 type QmpFinish struct {
     success bool
@@ -195,7 +195,7 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
             filename + ",if=none,id=" + "scsi-disk" + string(id) + ",format" + format + ",cache=writeback",
         },
     }
-    commands[1] = QmpCommand{
+    commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
             "driver":"scsi-hd","bus":"scsi0","scsi-id":string(id),
@@ -264,12 +264,12 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
                 callback: session.callback,
             }
             default:
-            response,_ := json.Marshal(*res)
+//            response,_ := json.Marshal(*res)
             handler <- &QmpFinish{
                 success: false,
                 reason: map[string]interface{}{
                     "error": "unknown received message type",
-                    "response": response,
+                    "response": []byte{},
                 },
                 callback: session.callback,
             }
@@ -290,7 +290,7 @@ func qmpHandler(ctx *QemuContext) {
         return
     }
 
-    buf := make([]*QmpSession)
+    buf := []*QmpSession{}
     res := make(chan QmpInteraction, 128)
 
     //routine for get message

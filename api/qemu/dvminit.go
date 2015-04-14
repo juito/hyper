@@ -24,7 +24,7 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
     length   := 0
     read     :=0
     buf := make([]byte, 512)
-    res := make([]byte)
+    res := []byte{}
     for read < needRead {
         want := needRead - read
         if want > 512 {
@@ -39,7 +39,7 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
         read = read + nr
 
         if length == 0 && read >= 8 {
-            length = binary.BigEndian.Uint32(res[4:8])
+            length = int(binary.BigEndian.Uint32(res[4:8]))
             if length > 0 {
                 needRead = needRead + length
             }

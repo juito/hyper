@@ -27,7 +27,7 @@ type QemuExitEvent struct {
 }
 
 type InitConnectedEvent struct {
-    conn *net.Conn
+    conn *net.UnixConn
 }
 
 type RunPodCommand struct {
@@ -106,7 +106,7 @@ func launchQemu(ctx *QemuContext) {
     }
 
     err = cmd.Wait()
-    ctx.hub <- &QemuExitEvent{message:"qemu exit with " + strconv.Itoa(err)}
+    ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
