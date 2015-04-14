@@ -5,23 +5,17 @@ import (
 )
 
 // Message
-type VmMessage struct {
-    head    [8]byte
-    message []byte
-}
-
 type DecodedMessage struct {
     code    uint32
-    length  uint32
     message []byte
 }
 
-func newVmMessage(t uint32, m []byte) *VmMessage {
-    msg := &VmMessage{
-        message: m,
-    }
-    binary.BigEndian.PutUint32(msg.head[:], uint32(t))
-    binary.BigEndian.PutUint32(msg.head[4:], uint32(len(m)))
+func newVmMessage(m *DecodedMessage) []byte {
+    length := len(m.message)
+    msg := make([]byte, 8 + length)
+    binary.BigEndian.PutUint32(msg[:], uint32(m.code))
+    binary.BigEndian.PutUint32(msg[4:], uint32(length))
+    copy(msg[8:], m.message)
     return msg
 }
 
@@ -54,7 +48,6 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
 
     return &DecodedMessage{
         code: binary.BigEndian.Uint32(res[:4]),
-        length: length,
         message: res[8:],
     },nil
 
@@ -91,14 +84,13 @@ func waitInitReady(ctx *QemuContext) {
 func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
     for {
         cmd := <- ctx.vm
-        init.Write(cmd.head)
-        init.Write(cmd.message)
-
+        init.Write(newVmMessage(cmd))
         res,err := readVmMessage(init)
         if err != nil {
             //TODO: deal with error
         } else if res.code == INIT_ACK {
             ctx.hub <- &CommandAck{
+                reply: cmd.code,
                 msg:res.message,
             }
         }

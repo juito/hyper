@@ -2,6 +2,7 @@ package qemu
 
 import (
     "os/exec"
+    "log"
     "net"
     "strconv"
     "dvm/api/pod"
@@ -34,7 +35,8 @@ type RunPodCommand struct {
 }
 
 type CommandAck struct {
-    msg []byte
+    reply   uint32
+    msg     []byte
 }
 
 type ContainerCreatedEvent struct {
@@ -116,7 +118,6 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
         sid := ctx.nextScsiId()
         ctx.qmp <- newDiskAddSession(ctx, info.info.name, "volume", info.info.filename, info.info.format, sid)
     }
-    //call create volumes
 }
 
 func runPod(ctx *QemuContext) {
@@ -125,16 +126,29 @@ func runPod(ctx *QemuContext) {
         //TODO: fail exit
         return
     }
-    ctx.vm <- newVmMessage(0, pod)
+    ctx.vm <- &DecodedMessage{
+        code: INIT_STARTPOD,
+        message: pod,
+    }
 }
 
 // state machine
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
+        log.Print("Qemu has exit")
         ctx.Close()
         ctx.Become(nil)
         return true
+    case EVENT_QMP_EVENT:
+        event := ev.(*QmpEvent)
+        if event.event == QMP_EVENT_SHUTDOWN {
+            log.Print("Got QMP shutdown event")
+            ctx.Close()
+            ctx.Become(nil)
+            return true
+        }
+        return false
     default:
         return false
     }
@@ -150,9 +164,16 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     // TODO: fail exit
                 }
             case COMMAND_RUN_POD:
+                log.Print("got spec, prepare devices")
                 prepareDevice(ctx, ev.(*RunPodCommand).Spec)
             case COMMAND_ACK:
-                println("run scucess")
+                ack := ev.(*CommandAck)
+                if ack.reply == INIT_STARTPOD {
+                    log.Print("run success", string(ack.msg))
+                    ctx.Become(stateRunning)
+                } else {
+                    log.Print("wrong reply to ", string(ack.reply), string(ack.msg))
+                }
             case EVENT_CONTAINER_ADD:
                 info := ev.(*ContainerCreatedEvent)
                 needInsert := ctx.containerCreated(info)
@@ -191,7 +212,14 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
     }
 }
 
-//func stateRunning
+func stateRunning(ctx *QemuContext, ev QemuEvent) {
+    if processed := commonStateHandler(ctx, ev); !processed {
+        switch ev.Event() {
+            default:
+                log.Print("got event during pod running")
+        }
+    }
+}
 
 // main loop
 

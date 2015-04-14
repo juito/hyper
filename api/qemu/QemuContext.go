@@ -21,7 +21,7 @@ type QemuContext struct {
     // Communication Context
     hub chan QemuEvent
     qmp chan QmpInteraction
-    vm  chan *VmMessage
+    vm  chan *DecodedMessage
 
     qmpSockName string
     dvmSockName string
@@ -250,7 +250,7 @@ func (ctx* QemuContext) deviceReady() bool {
 func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
 
     qmpChannel := make(chan QmpInteraction, 128)
-    vmChannel  := make(chan *VmMessage, 128)
+    vmChannel  := make(chan *DecodedMessage, 128)
     defer cleanup(func(){ close(qmpChannel);close(vmChannel)})
 
     //dir and sockets:
