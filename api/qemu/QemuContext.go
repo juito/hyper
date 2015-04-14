@@ -26,10 +26,12 @@ type QemuContext struct {
 
     qmpSockName string
     dvmSockName string
+    consoleSockName string
     shareDir    string
 
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
+    consoleSock *net.UnixListener
 
     handler     stateHandler
 
@@ -271,6 +273,7 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
     homeDir := BaseDir + "/" + id + "/"
     qmpSockName := homeDir + QmpSockName
     dvmSockName := homeDir + DvmSockName
+    consoleSockName := homeDir + ConsoleSockName
     shareDir    := homeDir + ShareDir
 
     err := os.MkdirAll(shareDir, 0755)
@@ -281,6 +284,13 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
 
     mkSureNotExist(qmpSockName)
     mkSureNotExist(dvmSockName)
+    mkSureNotExist(consoleSockName)
+
+    consoleSock,err := net.ListenUnix("unix",  &net.UnixAddr{consoleSockName, "unix"})
+    if err != nil {
+        panic(err)
+    }
+    defer cleanup(func(){consoleSock.Close()})
 
     qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
     if err != nil {
@@ -307,9 +317,11 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
     //    homeDir:    homeDir,   TODO wehether we need this
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
+        consoleSockName: consoleSockName,
         shareDir:   shareDir,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
+        consoleSock: consoleSock,
         handler:    stateInit,
         userSpec:   nil,
         vmSpec:     nil,
@@ -345,8 +357,8 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-hpet",
         "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
-        "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"panic=1 console=ttyS0\"",
-        "-qmp", "unix:" + ctx.qmpSockName, "-serial", "stdio",
+        "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"console=ttyS0 panic=1\"",
+        "-qmp", "unix:" + ctx.qmpSockName, "-serial", "unix:" + ctx.consoleSockName,
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
         "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",

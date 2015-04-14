@@ -105,6 +105,27 @@ func printDebugOutput(tag string, out io.ReadCloser) {
     }
 }
 
+func waitConsoleOutput(ctx *QemuContext) {
+    buf := make([]byte, 512)
+
+    conn, err := ctx.consoleSock.AcceptUnix()
+    if err != nil {
+        return nil, err
+    }
+
+    for {
+        nr,err := conn.Read(buf)
+        if err == io.EOF {
+            log.Println("The end")
+            return
+        } else if err != nil {
+            log.Println("Unhandled error ", err.Error())
+            return
+        }
+        log.Print("[console] ", string(buf[:nr]))
+    }
+}
+
 // launchQemu run qemu and wait it's quit, includes
 func launchQemu(ctx *QemuContext) {
     qemu,err := exec.LookPath("qemu-system-x86_64")
@@ -124,12 +145,12 @@ func launchQemu(ctx *QemuContext) {
         log.Println("Cannot get stderr of qemu")
     }
 
-    stdout, err := cmd.StdoutPipe()
-    if err != nil {
-        log.Println("Cannot get stderr of qemu")
-    }
+//    stdout, err := cmd.StdoutPipe()
+//    if err != nil {
+//        log.Println("Cannot get stderr of qemu")
+//    }
 
-    go printDebugOutput("stdout", stdout)
+    //go printDebugOutput("stdout", stdout)
     go printDebugOutput("stderr", stderr)
 
     if err := cmd.Start();err != nil {
@@ -297,6 +318,7 @@ func QemuLoop(dvmId string, hub chan QemuEvent, cpu, memory int) {
     go qmpHandler(context)
     go waitInitReady(context)
     go launchQemu(context)
+    go waitConsoleOutput(context)
 
     for context != nil && context.handler != nil {
         ev := <-context.hub

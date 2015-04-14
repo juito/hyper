@@ -4,6 +4,7 @@ const (
     BaseDir     = "/var/run/dvm"
     DvmSockName = "dvm.sock"
     QmpSockName = "qmp.sock"
+    ConsoleSockName = "console.sock"
     ShareDir    = "share_dir"
     Kernel      = "vmlinuz"
     Initrd      = "initrd.img"
