@@ -8,6 +8,7 @@ import (
 	"syscall"
 	"sync"
 	"unsafe"
+	"dvm/api/network/ipallocator"
 	"encoding/binary"
 	"sync/atomic"
 	"dvm/engine"
@@ -25,9 +26,11 @@ const (
 	SIOC_BRADDIF      = 0x89a2
 )
 
-var native binary.ByteOrder
-
-var nextSeqNr uint32
+var (
+	native		binary.ByteOrder
+	nextSeqNr	uint32
+	ipAllocator	= ipallocator.New()
+)
 
 type IfInfomsg struct {
 	syscall.IfInfomsg
@@ -87,9 +90,8 @@ type ifaces struct {
 
 func InitNetwork(job *engine.Job) error {
 	var (
-		networkv4      *net.IPNet
-		addr		net.Addr
-		bridgeIP       = job.Getenv("BridgeIP")
+		bridgeIPv4Net	*net.IPNet
+		bridgeIP	= job.Getenv("BridgeIP")
 	)
 
 	bridgeIface := job.Getenv("BridgeIface")
@@ -117,21 +119,25 @@ func InitNetwork(job *engine.Job) error {
 		if err != nil {
 			return err
 		}
+
+		bridgeIPv4Net = addr.(*net.IPNet);
 	} else {
 		// Bridge exists already, getting info...
 		// Validate that the bridge ip matches the ip specified by BridgeIP
+		bridgeIPv4Net = addr.(*net.IPNet);
+
 		if bridgeIP != "" {
-			networkv4 = addr.(*net.IPNet)
 			bip, _, err := net.ParseCIDR(bridgeIP)
 			if err != nil {
 				return err
 			}
-			if !networkv4.IP.Equal(bip) {
-				return fmt.Errorf("Bridge ip (%s) does not match existing bridge configuration %s", networkv4.IP, bip)
+			if !bridgeIPv4Net.IP.Equal(bip) {
+				return fmt.Errorf("Bridge ip (%s) does not match existing bridge configuration %s", addr, bip)
 			}
 		}
 	}
 
+	ipAllocator.RequestIP(bridgeIPv4Net, bridgeIPv4Net.IP);
 	return nil
 }
 
