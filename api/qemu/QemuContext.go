@@ -6,6 +6,7 @@ import (
     "strconv"
     "sync"
     "dvm/api/pod"
+    "log"
 )
 
 type QemuContext struct {
@@ -247,6 +248,19 @@ func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
 
+func mkSureNotExist(filename string) error {
+    if _, err := os.Stat(filename); os.IsNotExist(err) {
+        log.Println("no such file: ", filename)
+        return nil
+    } else if err == nil {
+        log.Println("try to remove exist file", filename)
+        return os.Remove(filename)
+    } else {
+        log.Println("can not state file ", filename)
+        return err
+    }
+}
+
 func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
 
     qmpChannel := make(chan QmpInteraction, 128)
@@ -264,6 +278,9 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
         panic(err)
     }
     defer cleanup(func(){os.RemoveAll(homeDir)})
+
+    mkSureNotExist(qmpSockName)
+    mkSureNotExist(dvmSockName)
 
     qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
     if err != nil {
@@ -318,11 +335,15 @@ func (ctx *QemuContext) Become(handler stateHandler) {
 }
 
 func (ctx *QemuContext) QemuArguments() []string {
-    return []string{
-        "-machine", "pc-i440fx-2.0,accel=kvm,usb=off", "-global", "kvm-pit.lost_tick_policy=discard", "-cpu", "host",
-        //"-machine", "pc-i440fx-2.0,usb=off", "-cpu", "core2duo", // this line for non-kvm env
+    platformParams := []string{
+        "-machine", "pc-i440fx-2.0,accel=kvm,usb=off", "-global", "kvm-pit.lost_tick_policy=discard", "-cpu", "host",}
+    if _, err := os.Stat("/dev/kvm"); os.IsNotExist(err) {
+        log.Println("kvm not exist change to no kvm mode")
+        platformParams = []string{"-machine", "pc-i440fx-2.0,usb=off", "-cpu", "core2duo",}
+    }
+    return append(platformParams,
         "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-acpi", "-no-hpet",
-        "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-serial", "null", "-boot", "strict=on",
+        "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
         "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"panic=1 console=ttyS0\"",
         "-qmp", "unix:" + ctx.qmpSockName, "-serial", "stdio",
@@ -331,7 +352,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
         "-fsdev", "local,id=virtio9p,path=" + ctx.shareDir + ",security_model=none",
         "-device", "virtio-9p-pci,fsdev=virtio9p,mount_tag=share_dir",
-    }
+    )
 }
 
 // InitDeviceContext will init device info in context
