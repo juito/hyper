@@ -49,6 +49,10 @@ func TestParseSpec(t *testing.T) {
         t.Error("wrong containers in vm spec")
     }
 
+    if ctx.vmSpec.ShareDir != "share_dir" {
+        t.Error("shareDir in vmSpec is ", ctx.vmSpec.ShareDir)
+    }
+
     res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
     if err != nil {
         t.Error("vmspec to json failed")

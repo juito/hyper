@@ -171,7 +171,7 @@ func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
         consoleSockName: consoleSockName,
-        shareDir:   shareDir,
+        shareDir:   ShareDir,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
         consoleSock: consoleSock,
@@ -362,7 +362,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
         "-fsdev", "local,id=virtio9p,path=" + ctx.shareDir + ",security_model=none",
-        "-device", "virtio-9p-pci,fsdev=virtio9p,mount_tag=share_dir",
+        "-device", "virtio-9p-pci,fsdev=virtio9p,mount_tag=" + ShareDir,
     )
 }
 
