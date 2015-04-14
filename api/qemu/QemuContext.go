@@ -324,7 +324,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-acpi", "-no-hpet",
         "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-serial", "null", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
-        "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "panic=1 console=ttyS0",
+        "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"panic=1 console=ttyS0\"",
         "-qmp", "unix:" + ctx.qmpSockName, "-serial", "stdio",
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
         "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
