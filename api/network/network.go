@@ -8,10 +8,9 @@ import (
 	"syscall"
 	"sync"
 	"unsafe"
-	"dvm/api/network/ipallocator"
 	"encoding/binary"
 	"sync/atomic"
-	"dvm/engine"
+	"dvm/api/network/ipallocator"
 )
 
 const (
@@ -88,13 +87,19 @@ type ifaces struct {
 	sync.Mutex
 }
 
-func InitNetwork(job *engine.Job) error {
-	var (
-		bridgeIPv4Net	*net.IPNet
-		bridgeIP	= job.Getenv("BridgeIP")
-	)
+func init() {
+	var x uint32 = 0x01020304
+	if *(*byte)(unsafe.Pointer(&x)) == 0x01 {
+		native = binary.BigEndian
+	} else {
+		native = binary.LittleEndian
+	}
+}
 
-	bridgeIface := job.Getenv("BridgeIface")
+func InitNetwork(bridgeIface, bridgeIP string) error {
+
+	var bridgeIPv4Net *net.IPNet
+
 	usingDefaultBridge := false
 	if bridgeIface == "" {
 		usingDefaultBridge = true
@@ -104,6 +109,7 @@ func InitNetwork(job *engine.Job) error {
 	addr, err := GetIfaceAddr(bridgeIface)
 
 	if err != nil {
+		fmt.Printf("create bridge %s %s\n", bridgeIface, bridgeIP)
 		// No Bridge existent, create one
 		// If we're not using the default bridge, fail without trying to create it
 		if !usingDefaultBridge {
@@ -112,16 +118,19 @@ func InitNetwork(job *engine.Job) error {
 
 		// If the iface is not found, try to create it
 		if err := configureBridge(bridgeIP, bridgeIface); err != nil {
+			fmt.Printf("create bridge failed\n")
 			return err
 		}
 
 		addr, err = GetIfaceAddr(bridgeIface)
 		if err != nil {
+			fmt.Printf("get iface addr failed\n")
 			return err
 		}
 
 		bridgeIPv4Net = addr.(*net.IPNet);
 	} else {
+		fmt.Printf("bridge exist\n")
 		// Bridge exists already, getting info...
 		// Validate that the bridge ip matches the ip specified by BridgeIP
 		bridgeIPv4Net = addr.(*net.IPNet);
@@ -174,6 +183,7 @@ func configureBridge(bridgeIP, bridgeIface string) error {
 	if len(bridgeIP) != 0 {
 		_, _, err := net.ParseCIDR(bridgeIP)
 		if err != nil {
+			fmt.Printf("%s parsecidr failed\n", bridgeIP)
 			return err
 		}
 		ifaceAddr = bridgeIP
@@ -185,6 +195,7 @@ func configureBridge(bridgeIP, bridgeIface string) error {
 
 	if err := CreateBridgeIface(bridgeIface); err != nil {
 		// The bridge may already exist, therefore we can ignore an "exists" error
+		fmt.Printf("CreateBridgeIface failed %s %s\n", bridgeIface, ifaceAddr)
 		if !os.IsExist(err) {
 			return err
 		}
@@ -347,13 +358,15 @@ func newIfAddrmsg(family int) *IfAddrmsg {
 }
 
 func (msg *IfAddrmsg) ToWireFormat() []byte {
+
 	length := syscall.SizeofIfAddrmsg
+	fmt.Printf("ifaddmsg length %d\n", length)
 	b := make([]byte, length)
 	b[0] = msg.Family
 	b[1] = msg.Prefixlen
 	b[2] = msg.Flags
 	b[3] = msg.Scope
-	native.PutUint32(b[4:8], msg.Index)
+	native.PutUint32(b[4:8], uint32(msg.Index))
 	return b
 }
 
@@ -477,11 +490,7 @@ func networkLinkIpAction(action, flags int, ifa IfAddr) error {
 	nlreq.AddData(msg)
 
 	var ipData []byte
-	if family == syscall.AF_INET {
-		ipData = ifa.ip.To4()
-	} else {
-		ipData = ifa.ip.To16()
-	}
+	ipData = ifa.ip.To4()
 
 	localData := newRtAttr(syscall.IFA_LOCAL, ipData)
 	nlreq.AddData(localData)

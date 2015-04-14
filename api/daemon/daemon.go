@@ -8,7 +8,7 @@ import (
 	"dvm/engine"
 	"dvm/lib/portallocator"
 	"dvm/api/docker"
-	//"dvm/api/network"
+	"dvm/api/network"
 )
 
 type Daemon struct {
@@ -27,7 +27,6 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"pod":				 daemon.CmdPod,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
-		//"init_network":			 network.InitNetwork,
 	} {
 		fmt.Printf("Engine Register: name= %s\n", name)
 		if err := eng.Register(name, method); err != nil {
@@ -70,15 +69,12 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	if err := os.MkdirAll(realRoot, 0700); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
-/*
-	job := eng.Job("init_network")
-	job.Setenv("BridgeIface", "dvm0")
-	job.Setenv("BridgeIP", "192.168.123.1")
 
-	if err := job.Run(); err != nil {
+	if err := network.InitNetwork("", "192.168.123.1/24"); err != nil {
+		fmt.Printf("InitNetwork failed\n")
 		return nil, err
 	}
-*/
+
 	var (
 		proto = "unix"
 		addr = "/var/run/docker.sock"
