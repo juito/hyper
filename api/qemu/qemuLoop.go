@@ -125,8 +125,8 @@ func waitConsoleOutput(ctx *QemuContext) {
             return
         }
 
-        if buf[0] == '\n' || buf[0] == '\r' {
-            log.Printf("[console] ", string(line))
+        if buf[0] == '\n' {
+            log.Printf("[console] %s", string(line[:len(line)-1]))
             line = []byte{}
         } else {
             line = append(line, buf[0])
