@@ -317,12 +317,12 @@ func (ctx *QemuContext) Become(handler stateHandler) {
 
 func (ctx *QemuContext) QemuArguments() []string {
     return []string{
-        "-machine", "pc-q35-2.0,accel=kvm,usb=off", "-global", "kvm-pit.lost_tick_policy=discard", "-cpu", "host",
-        //"-machine", "pc-q35-2.0,usb=off", "-cpu", "core2duo", // this line for non-kvm env
+        "-machine", "pc-i440fx-2.0,accel=kvm,usb=off", "-global", "kvm-pit.lost_tick_policy=discard", "-cpu", "host",
+        //"-machine", "pc-i440fx-2.0,usb=off", "-cpu", "core2duo", // this line for non-kvm env
         "-realtime", "mlock=off", "-no-user-config", "-nodefaults", "-no-acpi", "-no-hpet",
         "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-serial", "null", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
-        "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "panic=1 console=ttyS0",
+        "-kernel", ctx.kernel, "-initrd", ctx.initrd, 
         "-qmp", "unix:" + ctx.qmpSockName,
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
         "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
