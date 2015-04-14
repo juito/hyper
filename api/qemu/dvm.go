@@ -44,6 +44,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 	}
 
 	// Process the 'Containers' section
+	fmt.Printf("Process the Containers section in POD SPEC\n")
 	for i, c := range userPod.Containers {
 		imgName := c.Image
 		body, _, err := cli.SendCmdCreate(imgName)

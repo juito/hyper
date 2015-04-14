@@ -205,7 +205,7 @@ func postPodCreate(eng *engine.Engine, version version.Version, w http.ResponseW
 	}
 
 	fmt.Printf("DVM LOG: Args string is %s\n", r.Form.Get("podArgs"))
-	job := eng.Job("create", r.Form.Get("podArgs"))
+	job := eng.Job("pod", r.Form.Get("podArgs"))
 
 	if err := job.Run(); err != nil {
 		return err

@@ -28,7 +28,7 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 
 	v := url.Values{}
 	v.Set("podArgs", string(body))
-	if _, _, err := readBody(cli.call("POST", "/pod/create"+v.Encode(), nil, nil)); err != nil {
+	if _, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil)); err != nil {
 		return err
 	}
 	return nil
