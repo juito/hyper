@@ -110,7 +110,8 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     conn, err := ctx.consoleSock.AcceptUnix()
     if err != nil {
-        return nil, err
+        log.Println(err.Error())
+        return
     }
 
     for {
