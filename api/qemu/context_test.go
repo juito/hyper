@@ -157,6 +157,13 @@ func TestVolumeReady(t *testing.T) {
     t.Log(string(res))
 }
 
+func dumpProgress(t *testing.T, pm *processingMap) {
+    t.Log("containers:")
+    for id,ready := range pm.containers {
+        t.Logf("\t%d\t%d", id, ready)
+    }
+}
+
 func TestContainerCreated(t *testing.T) {
     ctx := initContext("vmmid", nil, 1, 128)
 
@@ -167,6 +174,12 @@ func TestContainerCreated(t *testing.T) {
     }
 
     ctx.InitDeviceContext(&spec, 0)
+
+    dumpProgress(t, ctx.progress.adding)
+
+    if ctx.deviceReady() {
+        t.Error("should not ready when containers are not ready")
+    }
 
     ready := &ContainerCreatedEvent{
         Index:0,
@@ -184,12 +197,20 @@ func TestContainerCreated(t *testing.T) {
 
     ctx.containerCreated(ready)
 
+    if ctx.deviceReady() {
+        t.Error("should not ready when volume are not inserted")
+    }
+
     bevent := &BlockdevInsertedEvent{
         Name: "/dev/dm7",
         SourceType: "image",
         DeviceName: "sda",
     }
     ctx.blockdevInserted(bevent)
+
+    if !ctx.deviceReady() {
+        t.Error("after image inserted, it should ready now")
+    }
 
     res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
     if err != nil {
