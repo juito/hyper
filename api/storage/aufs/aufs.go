@@ -1,10 +1,13 @@
 package aufs
 
 import (
+	"fmt"
     "bufio"
     "io/ioutil"
     "os"
+	"os.exec"
     "path"
+	"path/filepath"
     "syscall"
     "sync"
 )
@@ -31,7 +34,7 @@ var (
 
 const MsRemount = syscall.MS_REMOUNT
 
-func mountContainerToSharedDir(containerId, backedFs, rootDir, sharedDir string) (string, error) {
+func mountContainerToSharedDir(containerId, rootDir, sharedDir string) (string, error) {
     var (
         mntPath = path.Join(rootDir, "mnt")
         layersPath = path.Join(rootDir, "layers")
@@ -51,8 +54,55 @@ func mountContainerToSharedDir(containerId, backedFs, rootDir, sharedDir string)
     return mountPoint, nil
 }
 
-func attachFiles(containerId, fromFile, toDir, rootDir, perm string) (string, error) {
-    return "", nil
+func attachFiles(containerId, fromFile, toDir, rootDir, perm string) error {
+	if containerId == "" {
+		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
+	}
+	permInt, err := strconv.Atoi(perm)
+	if err != nil {
+		return err
+	}
+	// It just need the block device without copying any files
+	// FIXME whether we need to return an error if the target directory is null
+	if toDir == "" {
+		return nil
+	}
+	// Make a new file with the given premission and wirte the source file content in it
+	if _, err := os.Stat(fromFile); err != nil && os.IsNotExist(err) {
+		return err
+	}
+	buf, err := ioutil.ReadFile(fromFile)
+	if err != nil {
+		return err
+	}
+	targetDir := path.Join(rootDir, containerId, "rootfs", toDir)
+	targetInfo, err := os.Stat(targetDir)
+	targetFile := targetDir
+	if err != nil && os.IsNotExist(err) {
+		if targetInfo.IsDir() {
+			// we need to create a target directory with given premission
+			if err := os.MkdirAll(targetDir, os.FileMode(permInt)); err != nil {
+				return err
+			}
+			targetFile = path.Join(targetDir, filepath.Base(fromFile))
+		} else {
+			tmpDir := filepath.Dir(targetDir)
+			if _, err := os.Stat(tmpDir); err != nil && os.IsNotExist(err) {
+				if err := os.MkdirAll(tmpDir, os.FileMode(permInt)); err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		targetFile = path.Join(targetDir, filepath.Base(fromFile))
+	}
+	err = ioutil.WriteFile(targetFile, buf, os.FileMode(permInt))
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
 }
 
 func createVolume(backedFs, rootDir string) (string, error) {
