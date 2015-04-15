@@ -103,11 +103,6 @@ func attachFiles(containerId, fromFile, toDir, rootDir, perm string) error {
 
 	return nil
 }
-}
-
-func createVolume(backedFs, rootDir string) (string, error) {
-    return "", nil
-}
 
 func getParentDiffPaths(id, rootPath string) ([]string, error) {
 	parentIds, err := getParentIds(path.Join(rootPath, "layers", id))

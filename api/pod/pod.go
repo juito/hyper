@@ -104,6 +104,7 @@ func ProcessPodBytes(body []byte) (*UserPod, error) {
 
     var (
         v UserContainer
+        vol UserVolume
         num = 0
     )
     for _, v = range userPod.Containers {
@@ -114,6 +115,11 @@ func ProcessPodBytes(body []byte) (*UserPod, error) {
     }
     if num == 0 {
         return nil, fmt.Errorf("Please correct your POD file, the container section can not be null!\n")
+    }
+    for _, vol = range userPod.UserVolume {
+        if vol.Name == "" {
+            return nil, fmt.Errorf("DVM ERROR: please specific your volume name, it can not be null!\n")
+        }
     }
 
     return &userPod, nil

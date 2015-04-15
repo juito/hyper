@@ -163,26 +163,28 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 					Format: "raw",
 				}
 				hub <- myVolReadyEvent
+				continue
 
-			} else if storageDriver == "aufs" {
-				// TODO
+			} else {
+				// Make sure the v.Name is given
+				v.Source = path.Join("/var/tmp/", v.Name)
 			}
-		} else {
-			// Process the situation if the source is not NULL, we need to bind that dir to sharedDir
-			var flags uintptr = syscall.MS_MGC_VAL
-
-			mountSharedDir = pod.RandStr(10, "alpha")
-			if err := syscall.Mount(v.Source, path.Join(sharedDir, mountSharedDir), fstype, flags, "--bind"); err != nil {
-				return "", nil
-			}
-			myVolReadyEvent := &VolumeReadyEvent {
-				Name: v.Name,
-				Filepath: mountSharedDir,
-				Fstype: "dir",
-				Format: "",
-			}
-			hub <- myVolReadyEvent
 		}
+
+		// Process the situation if the source is not NULL, we need to bind that dir to sharedDir
+		var flags uintptr = syscall.MS_MGC_VAL
+
+		mountSharedDir = pod.RandStr(10, "alpha")
+		if err := syscall.Mount(v.Source, path.Join(sharedDir, mountSharedDir), fstype, flags, "--bind"); err != nil {
+			return "", nil
+		}
+		myVolReadyEvent := &VolumeReadyEvent {
+			Name: v.Name,
+			Filepath: mountSharedDir,
+			Fstype: "dir",
+			Format: "",
+		}
+		hub <- myVolReadyEvent
 	}
 
 	return containerId, nil
@@ -271,7 +273,7 @@ func attachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string)
 	}
 	// Make a new file with the given premission and wirte the source file content in it
 	if _, err := os.Stat(fromFile); err != nil && os.IsNotExist(err) {
-		// The gived file is not exist, we need to unmout the device and return
+		// The given file is not exist, we need to unmout the device and return
 		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
 		return err
 	}
