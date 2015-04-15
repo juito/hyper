@@ -6,14 +6,13 @@ import (
     "encoding/json"
 )
 
-func testQmpInitHelper(t *testing.T, s string) {
+func testQmpInitHelper(t *testing.T, s string) net.Conn {
     t.Log("connecting to ", s)
 
     c,err := net.Dial("unix", s)
     if err != nil {
         t.Error("cannot connect to qmp socket", err.Error())
     }
-    defer c.Close()
 
     t.Log("connected")
 
@@ -47,22 +46,20 @@ func testQmpInitHelper(t *testing.T, s string) {
 
     c.Write([]byte(`{ "return": {}}`))
 
-    c.Write([]byte(`{ "event": "SHUTDOWN", "timestamp": { "seconds": 1265044230, "microseconds": 450486 } }`))
+    return c
 }
 
 func TestQmpHello(t *testing.T) {
 
-    t.Log("begin test qmp")
-
     qemuChan := make(chan QemuEvent, 128)
     ctx := initContext("vmid", qemuChan, 1, 128)
 
-    t.Log("launcher handler")
     go qmpHandler(ctx)
-    t.Log("launcher tester")
 
-    testQmpInitHelper(t, ctx.qmpSockName)
-    t.Log("waiting the end")
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    c.Write([]byte(`{ "event": "SHUTDOWN", "timestamp": { "seconds": 1265044230, "microseconds": 450486 } }`))
 
     ev := <- qemuChan
     if ev.Event() != EVENT_QMP_EVENT {
@@ -74,4 +71,42 @@ func TestQmpHello(t *testing.T) {
     }
 
     t.Log("qmp finished")
+}
+
+func TestQmpDiskSession(t *testing.T) {
+
+    qemuChan := make(chan QemuEvent, 128)
+    ctx := initContext("vmid", qemuChan, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    ctx.qmp <- newDiskAddSession(ctx, "vol1", "volume", "/dev/dm7", "raw", 5)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != EVENT_BLOCK_INSERTED {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*BlockdevInsertedEvent)
+    t.Log("got block device", info.Name, info.SourceType, info.DeviceName)
 }
