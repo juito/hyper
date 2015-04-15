@@ -100,6 +100,20 @@ func TestParseVolumes(t *testing.T) {
             vol1.info.name, vol1.info.filename, vol1.info.format, vol1.info.fstype,vol1.info.deviceName)
     }
 
+    vol2 := ctx.devices.volumeMap["vol2"]
+    if vol2.pos[0] != "/var/dir2" {
+        t.Error("vol1 (/var/dir2) path is ", vol2.pos[0])
+    }
+
+    if vol2.readOnly[0] {
+        t.Error("vol2 on container 0 should not be read only")
+    }
+
+    ref2 := blockDescriptor{ name:"vol2", filename:"/home/whatever", format:"vfs", fstype:"dir", deviceName:""}
+    if *vol2.info != ref2 {
+        t.Errorf("info of vol2: %q %q %q %q %q",
+        vol2.info.name, vol2.info.filename, vol2.info.format, vol2.info.fstype,vol2.info.deviceName)
+    }
 }
 
 func testJson(key string) string {
