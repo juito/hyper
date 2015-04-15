@@ -110,3 +110,41 @@ func TestQmpDiskSession(t *testing.T) {
     info := msg.(*BlockdevInsertedEvent)
     t.Log("got block device", info.Name, info.SourceType, info.DeviceName)
 }
+
+func TestQmpNetSession(t *testing.T) {
+
+    qemuChan := make(chan QemuEvent, 128)
+    ctx := initContext("vmid", qemuChan, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    ctx.qmp <- newNetworkAddSession(ctx, "12", "eth0", 0, 3)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != EVENT_INTERFACE_INSERTED {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*NetDevInsertedEvent)
+    t.Log("got block device", info.Address, info.Index, info.DeviceName)
+}
