@@ -116,6 +116,47 @@ func TestParseVolumes(t *testing.T) {
     }
 }
 
+func TestVolumeReady(t *testing.T) {
+    ctx := initContext("vmmid", nil, 1, 128)
+
+    spec := pod.UserPod{}
+    err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
+    if err != nil {
+        t.Error("parse json failed ", err.Error())
+    }
+
+    ctx.InitDeviceContext(&spec, 0)
+
+    ready := &VolumeReadyEvent{
+        Name: "vol2",
+        Filepath: "/a1b2c3d4/whatever",
+        Fstype: "dir",
+        Format: "",
+    }
+    ctx.volumeReady(ready)
+
+    ready = &VolumeReadyEvent{
+        Name: "vol1",
+        Filepath: "/dev/dm17",
+        Fstype: "xfs",
+        Format: "raw",
+    }
+    ctx.volumeReady(ready)
+
+    bevent := &BlockdevInsertedEvent{
+        Name: "vol1",
+        SourceType: "volume",
+        DeviceName: "sda",
+    }
+    ctx.blockdevInserted(bevent)
+
+    res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+    if err != nil {
+        t.Error("vmspec to json failed")
+    }
+    t.Log(string(res))
+}
+
 func testJson(key string) string {
     jsons := make(map[string]string)
 
