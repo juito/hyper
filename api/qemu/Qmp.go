@@ -227,7 +227,7 @@ func newNetworkAddSession(ctx *QemuContext, fd, device string, index, addr int) 
     }
 
     if len(fd) > 0 {
-        (*commands[0]["Arguments"])["fd"] = fd
+        (*commands[0]).Arguments["fd"] = fd
     }
     return &QmpSession{
         commands: commands,
