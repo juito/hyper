@@ -299,12 +299,13 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
         volume := ctx.devices.volumeMap[info.Name]
         volume.info.deviceName = info.DeviceName
         for c,vol := range volume.pos {
-            for i,v := range ctx.vmSpec.Containers[c].Volumes {
-                if v.Mount == vol {
-                    ctx.vmSpec.Containers[c].Volumes[i].Device = info.DeviceName
-                    ctx.vmSpec.Containers[c].Volumes[i].Fstype = volume.info.fstype
-                }
-            }
+            ctx.vmSpec.Containers[c].Volumes = append(ctx.vmSpec.Containers[c].Volumes,
+                VmVolumeDescriptor{
+                    Device:info.DeviceName,
+                    Mount:vol,
+                    Fstype:volume.info.fstype,
+                    ReadOnly:volume.readOnly[c],
+                })
         }
     }
 
@@ -399,7 +400,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
             isFsmap[vol.Name]    = true
             ctx.devices.volumeMap[vol.Name] = &volumeInfo{
                 info: &blockDescriptor{
-                    name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"ext4", deviceName: "", },
+                    name: vol.Name, filename: vol.Source, format:vol.Driver, fstype:"dir", deviceName: "", },
                 pos:  make(map[int]string),
                 readOnly: make(map[int]bool),
             }
