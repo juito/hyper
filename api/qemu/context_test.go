@@ -84,6 +84,22 @@ func TestParseVolumes(t *testing.T) {
         t.Error("vmspec to json failed")
     }
     t.Log(string(res))
+
+    vol1 := ctx.devices.volumeMap["vol1"]
+    if vol1.pos[0] != "/var/dir1" {
+        t.Error("vol1 (/var/dir1) path is ", vol1.pos[0])
+    }
+
+    if !vol1.readOnly[0] {
+        t.Error("vol1 on container 0 should be read only")
+    }
+
+    ref1 := blockDescriptor{ name:"vol1", filename:"", format:"", fstype:"", deviceName:"" }
+    if *vol1.info != ref1 {
+        t.Errorf("info of vol1: %q %q %q %q %q",
+            vol1.info.name, vol1.info.filename, vol1.info.format, vol1.info.fstype,vol1.info.deviceName)
+    }
+
 }
 
 func testJson(key string) string {
