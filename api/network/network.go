@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"syscall"
+	"strings"
 	"sync"
 	"unsafe"
 	"encoding/binary"
@@ -23,6 +24,9 @@ const (
 	SIOC_BRADDBR      = 0x89a0
 	SIOC_BRDELBR      = 0x89a1
 	SIOC_BRADDIF      = 0x89a2
+	CIFF_TAP	  = 0x0002
+	CIFF_NO_PI	  = 0x1000
+	CIFF_ONE_QUEUE	  = 0x2000
 )
 
 var (
@@ -33,11 +37,19 @@ var (
 	bridgeIface	string
 )
 
+type ifReq struct {
+	Name [0x10] byte
+	Flags uint16
+	pad [0x28 - 0x10 - 2]byte
+}
+
 type Settings struct {
 	IPAddress		string
 	IPPrefixLen		int
 	Gateway			string
 	Bridge			string
+	Device			string
+	File			*os.File
 }
 
 type IfInfomsg struct {
@@ -670,6 +682,9 @@ func AddToBridge(iface, master *net.Interface) error {
 }
 
 func Allocate(requestedIP string) (*Settings, error) {
+	var req ifReq
+	var errno syscall.Errno
+
 	ip, err := ipAllocator.RequestIP(bridgeIPv4Net, net.ParseIP(requestedIP))
 	if err != nil {
 		return nil, err
@@ -677,18 +692,59 @@ func Allocate(requestedIP string) (*Settings, error) {
 
 	maskSize, _ := bridgeIPv4Net.Mask.Size()
 
+	file, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
+	if err != nil {
+		return nil, err
+	}
+
+	req.Flags = CIFF_TAP
+	_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, file.Fd(),
+				      uintptr(syscall.TUNSETIFF),
+				      uintptr(unsafe.Pointer(&req)))
+	if errno != 0 {
+		err = fmt.Errorf("create tap device failed\n")
+		file.Close()
+		return nil, err
+	}
+
+	device := strings.Trim(string(req.Name[:]), "\x00")
+
+
+	tapIface, err := net.InterfaceByName(device)
+	if err != nil {
+		fmt.Printf("get interface by name %s failed %s\n", device, err)
+		file.Close()
+		return nil, err
+	}
+
+	bIface, err := net.InterfaceByName(bridgeIface)
+	if err != nil {
+		fmt.Printf("get interface by name %s failed\n", bridgeIface)
+		file.Close()
+		return nil, err
+	}
+
+	err = AddToBridge(tapIface, bIface)
+	if err != nil {
+		fmt.Printf("Add to bridge failed %s %s\n", bridgeIface, device)
+		file.Close()
+		return nil, err
+	}
 	networkSettings := &Settings{
-		IPAddress:            ip.String(),
-		Gateway:              bridgeIPv4Net.IP.String(),
-		Bridge:               bridgeIface,
-		IPPrefixLen:          maskSize,
+		IPAddress:	ip.String(),
+		Gateway:	bridgeIPv4Net.IP.String(),
+		Bridge:		bridgeIface,
+		IPPrefixLen:	maskSize,
+		Device:		device,
+		File:		file,
 	}
 
 	return networkSettings, nil
 }
 
 // Release an interface for a select ip
-func Release(releasedIP string) error {
+func Release(releasedIP string, file os.File) error {
+	file.Close()
 	if err := ipAllocator.ReleaseIP(bridgeIPv4Net, net.ParseIP(releasedIP)); err != nil {
 		return err
 	}
