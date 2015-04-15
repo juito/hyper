@@ -29,7 +29,16 @@ var (
 	native		binary.ByteOrder
 	nextSeqNr	uint32
 	ipAllocator	= ipallocator.New()
+	bridgeIPv4Net	*net.IPNet
+	bridgeIface	string
 )
+
+type Settings struct {
+	IPAddress		string
+	IPPrefixLen		int
+	Gateway			string
+	Bridge			string
+}
 
 type IfInfomsg struct {
 	syscall.IfInfomsg
@@ -96,14 +105,13 @@ func init() {
 	}
 }
 
-func InitNetwork(bridgeIface, bridgeIP string) error {
-
-	var bridgeIPv4Net *net.IPNet
-
+func InitNetwork(bIface, bridgeIP string) error {
 	usingDefaultBridge := false
-	if bridgeIface == "" {
+	if bIface == "" {
 		usingDefaultBridge = true
 		bridgeIface = DefaultNetworkBridge
+	} else {
+		bridgeIface = bIface
 	}
 
 	addr, err := GetIfaceAddr(bridgeIface)
@@ -655,6 +663,33 @@ func AddToBridge(iface, master *net.Interface) error {
 	ifr.IfruIndex = int32(iface.Index)
 
 	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(s), SIOC_BRADDIF, uintptr(unsafe.Pointer(&ifr))); err != 0 {
+		return err
+	}
+
+	return nil
+}
+
+func Allocate(id, requestedIP string) (*Settings, error) {
+	ip, err := ipAllocator.RequestIP(bridgeIPv4Net, net.ParseIP(requestedIP))
+	if err != nil {
+		return nil, err
+	}
+
+	maskSize, _ := bridgeIPv4Net.Mask.Size()
+
+	networkSettings := &Settings{
+		IPAddress:            ip.String(),
+		Gateway:              bridgeIPv4Net.IP.String(),
+		Bridge:               bridgeIface,
+		IPPrefixLen:          maskSize,
+	}
+
+	return networkSettings, nil
+}
+
+// Release an interface for a select ip
+func Release(releasedIP string) error {
+	if err := ipAllocator.ReleaseIP(bridgeIPv4Net, net.ParseIP(releasedIP)); err != nil {
 		return err
 	}
 
