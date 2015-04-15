@@ -48,7 +48,7 @@ type QemuContext struct {
 type deviceMap struct {
     imageMap    map[string]*imageInfo
     volumeMap   map[string]*volumeInfo
-    networkMap  map[int]*networkInfo
+    networkMap  map[int]*InterfaceCreated
 }
 
 type blockDescriptor struct {
@@ -68,12 +68,6 @@ type volumeInfo struct {
     info        *blockDescriptor
     pos         volumePosition
     readOnly    map[int]bool
-}
-
-type networkInfo struct {
-    index   int
-    address int
-    device  string
 }
 
 type volumePosition map[int]string     //containerIdx -> mpoint
@@ -97,7 +91,7 @@ func newDeviceMap() *deviceMap {
     return &deviceMap{
         imageMap:   make(map[string]*imageInfo),
         volumeMap:  make(map[string]*volumeInfo),
-        networkMap: make(map[int]*networkInfo),
+        networkMap: make(map[int]*InterfaceCreated),
     }
 }
 
@@ -106,6 +100,7 @@ func newProcessingMap() *processingMap{
         containers: make(map[int]bool),    //to be create, and get images,
         volumes:    make(map[string]bool),  //to be create, and get volume
         blockdevs:  make(map[string]bool),  //to be insert to qemu, both volume and images
+        networks:   make(map[int]bool),
     }
 }
 
@@ -315,15 +310,42 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
     }
 }
 
+func (ctx *QemuContext) interfaceCreated(info* InterfaceCreated) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+    ctx.devices.networkMap[info.Index] = info
+}
+
 func (ctx* QemuContext) netdevInserted(info *NetDevInsertedEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
     ctx.progress.finished.networks[info.Index] = true
-    ctx.devices.networkMap[info.Index] = &networkInfo{
-        device:  info.DeviceName,
-        index:   info.Index,
-        address: info.Address,
-    }
     if _,ok := ctx.progress.adding.networks[info.Index] ; ok {
         delete(ctx.progress.adding.networks, info.Index)
+    }
+    if len(ctx.progress.adding.networks) == 0 {
+        count := len(ctx.devices.networkMap)
+        infs := make([]VmNetworkInf, count)
+        routes := []VmRoute{}
+        for i:=0; i < count ; i++ {
+            infs[i].Device    = ctx.devices.networkMap[i].DeviceName
+            infs[i].IpAddress = ctx.devices.networkMap[i].IpAddr
+            infs[i].NetMask   = ctx.devices.networkMap[i].NetMask
+
+            for _,rl := range ctx.devices.networkMap[i].RouteTable {
+                dev := ""
+                if rl.ViaThis {
+                    dev = infs[i].Device
+                }
+                routes = append(routes, VmRoute{
+                    Dest:       rl.Destination,
+                    Gateway:    rl.Gateway,
+                    Device:     dev,
+                })
+            }
+        }
+        ctx.vmSpec.Interfaces = infs
+        ctx.vmSpec.Routes = routes
     }
 }
 

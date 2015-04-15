@@ -210,7 +210,7 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
     }
 }
 
-func newNetworkAddSession(ctx *QemuContext, device string, index, addr int) *QmpSession {
+func newNetworkAddSession(ctx *QemuContext, fd, device string, index, addr int) *QmpSession {
     busAddr := fmt.Sprintf("0x%x", addr)
     commands := make([]*QmpCommand, 2)
     commands[0] = &QmpCommand{
@@ -224,6 +224,10 @@ func newNetworkAddSession(ctx *QemuContext, device string, index, addr int) *Qmp
         Arguments: map[string]interface{}{
             "driver":"virtio-net-pci","netdev":device,"id":"net-" + busAddr,"bus":"pci.0","addr":busAddr,
         },
+    }
+
+    if len(fd) > 0 {
+        (*commands[0]["Arguments"])["fd"] = fd
     }
     return &QmpSession{
         commands: commands,

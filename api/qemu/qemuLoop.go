@@ -5,9 +5,11 @@ import (
     "log"
     "net"
     "dvm/api/pod"
+    "dvm/api/network"
     "encoding/json"
     "io"
     "strings"
+    "fmt"
 )
 
 // helpers
@@ -69,7 +71,18 @@ type BlockdevInsertedEvent struct {
 
 type InterfaceCreated struct {
     Index       int
+    PCIAddr     int
+    Fd          string
     DeviceName  string
+    IpAddr      string
+    NetMask     string
+    RouteTable  []*RouteRule
+}
+
+type RouteRule struct {
+    Destination string
+    Gateway     string
+    ViaThis     bool
 }
 
 type NetDevInsertedEvent struct {
@@ -90,6 +103,42 @@ func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTE
 func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 
 // routines:
+
+func CreateInterface(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent) {
+    inf,err := network.Allocate("")
+    if err != nil {
+        log.Print("interface creating failed", err.Error())
+        return
+    }
+
+    ip,network,err := net.ParseCIDR(fmt.Sprintf("%s/%d", inf.IPAddress, inf.IPPrefixLen))
+    var tmp []byte = network.Mask
+    var mask net.IP = tmp
+
+    rt:=[]*RouteRule{
+        &RouteRule{
+            Destination: fmt.Sprint("%s/%d", network.IP.String(), inf.IPPrefixLen),
+            Gateway:"", ViaThis:true,
+        },
+    }
+    if isDefault {
+        rt = append(rt, &RouteRule{
+            Destination: "0.0.0.0/24",
+            Gateway: inf.Gateway, ViaThis: true,
+        })
+    }
+
+    event := &InterfaceCreated{
+        Index:      index,
+        PCIAddr:    pciAddr,
+        DeviceName: name,
+        IpAddr:     ip.String(),
+        NetMask:    mask.String(),
+        RouteTable: rt,
+    }
+
+    callback <- event
+}
 
 func printDebugOutput(tag string, out io.ReadCloser) {
     buf := make([]byte, 1024)
@@ -175,11 +224,16 @@ func launchQemu(ctx *QemuContext) {
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
-    networks := 0
+    networks := 1
     ctx.InitDeviceContext(spec, networks)
     go CreateContainer(spec, ctx.shareDir, ctx.hub)
     if networks > 0 {
         // TODO: go create interfaces here
+        for i:=0; i < networks; i++ {
+            name := fmt.Sprint("eth%d", i)
+            addr := ctx.nextPciAddr()
+            go CreateInterface(i, addr, name, i == 0, ctx.hub)
+        }
     }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
@@ -273,8 +327,9 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 }
             case EVENT_INTERFACE_ADD:
                 info := ev.(*InterfaceCreated)
-                addr := ctx.nextPciAddr()
-                ctx.qmp <- newNetworkAddSession(ctx, info.DeviceName, info.Index, addr)
+                //addr := ctx.nextPciAddr()
+                ctx.interfaceCreated(info)
+                ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
             case EVENT_INTERFACE_INSERTED:
                 info := ev.(*NetDevInsertedEvent)
                 ctx.netdevInserted(info)
