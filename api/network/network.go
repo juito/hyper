@@ -669,7 +669,7 @@ func AddToBridge(iface, master *net.Interface) error {
 	return nil
 }
 
-func Allocate(id, requestedIP string) (*Settings, error) {
+func Allocate(requestedIP string) (*Settings, error) {
 	ip, err := ipAllocator.RequestIP(bridgeIPv4Net, net.ParseIP(requestedIP))
 	if err != nil {
 		return nil, err
