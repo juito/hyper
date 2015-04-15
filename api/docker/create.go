@@ -5,6 +5,7 @@ import (
 	"net/url"
 	"strings"
 	"os"
+	"dvm/lib/glog"
 )
 
 type Config struct {
@@ -104,12 +105,12 @@ func (cli *DockerCli) SendCmdCreate(args ...string) ([]byte, int, error) {
 	imageAndTag := fmt.Sprintf("%s:%s", repos, tag)
 	containerValues := url.Values{}
 	config := initAndMergeConfigs(imageAndTag)
-	fmt.Printf("The Repository is %s, and the tag is %s\n", repos, tag)
+	glog.V(3).Infof("The Repository is %s, and the tag is %s\n", repos, tag)
 	body, statusCode, err := cli.Call("POST", "/containers/create?"+containerValues.Encode(), config, nil)
-	fmt.Printf("The returned status code is %s!\n", statusCode)
+	glog.V(3).Infof("The returned status code is %s!\n", statusCode)
 	if statusCode == 404 || (err != nil && strings.Contains(err.Error(), repos)) {
-		fmt.Printf("can not find the image %s\n", repos)
-		fmt.Printf("pull the image from the repository!\n")
+		glog.V(3).Infof("can not find the image %s\n", repos)
+		glog.V(3).Info("pull the image from the repository!\n")
 		err = cli.Stream("POST", "/images/create?"+ v.Encode(), nil, os.Stdout, nil)
 		if err != nil {
 			return nil, -1, err

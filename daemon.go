@@ -7,6 +7,7 @@ import (
 	"dvm/api/daemon"
 	"dvm/engine"
 	"dvm/dvmversion"
+	"dvm/lib/glog"
 )
 
 func main() {
@@ -17,18 +18,18 @@ func mainDaemon() {
 	eng := engine.New()
 	d, err := daemon.NewDaemon(eng)
 	if err != nil {
-		fmt.Printf("ERROR: the daemin create failed!\n")
+		glog.Error("the daemin create failed!\n")
 		return
 	}
 
 	daemonInitWait := make(chan error)
 	// Install the accepted jobs
 	if err := d.Install(eng); err != nil {
-		fmt.Printf("ERROR: the daemin install failed!\n")
+		glog.Error("the daemin install failed!\n")
 		return
 	}
 
-	fmt.Printf("DVM daemon: %s %s\n",
+	glog.V(0).Infof("DVM daemon: %s %s\n",
 		dvmversion.VERSION,
 		dvmversion.GITCOMMIT,
 	)
@@ -36,7 +37,7 @@ func mainDaemon() {
 	// after the daemon is done setting up we can tell the api to start
 	// accepting connections
 	if err := eng.Job("acceptconnections").Run(); err != nil {
-		fmt.Printf("ERROR: the acceptconnections job run failed!\n")
+		glog.Error("the acceptconnections job run failed!\n")
 		return
 	}
 	defaulthost := "unix:///var/run/dvm.sock"
@@ -49,7 +50,7 @@ func mainDaemon() {
 	serveAPIWait := make(chan error)
 	go func() {
 		if err := job.Run(); err != nil {
-			fmt.Printf("ServeAPI error: %v\n", err)
+			glog.Errorf("ServeAPI error: %v\n", err)
 			serveAPIWait <- err
 			return
 		}
@@ -71,7 +72,7 @@ func mainDaemon() {
 		// continue listening forever if the error had no impact to API
 		fmt.Printf(outStr)
 	} else {
-		fmt.Printf("Daemon has completed initialization\n")
+		glog.V(0).Info("Daemon has completed initialization\n")
 	}
 
 	// Daemon is fully initialized and handling API traffic
@@ -81,6 +82,6 @@ func mainDaemon() {
 	// exited the daemon process above)
 	eng.Shutdown()
 	if errAPI != nil {
-		fmt.Printf("Shutting down due to ServeAPI error: %v\n", errAPI)
+		glog.Warningf("Shutting down due to ServeAPI error: %v\n", errAPI)
 	}
 }

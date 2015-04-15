@@ -10,6 +10,8 @@ import (
 	"path/filepath"
     "syscall"
     "sync"
+
+	"dvm/lib/glog"
 )
 
 /*
@@ -181,14 +183,14 @@ func useDirperm() bool {
 	enableDirpermLock.Do(func() {
 		base, err := ioutil.TempDir("", "docker-aufs-base")
 		if err != nil {
-			fmt.Printf("DVM ERROR: error checking dirperm1: %s", err.Error())
+			glog.Errorf("error checking dirperm1: %s", err.Error())
 			return
 		}
 		defer os.RemoveAll(base)
 
 		union, err := ioutil.TempDir("", "docker-aufs-union")
 		if err != nil {
-			fmt.Printf("DVM ERROR: error checking dirperm1: %s", err.Error())
+			glog.Errorf("error checking dirperm1: %s", err.Error())
 			return
 		}
 		defer os.RemoveAll(union)
@@ -199,7 +201,7 @@ func useDirperm() bool {
 		}
 		enableDirperm = true
 		if err := aufsUnmount(union); err != nil {
-			fmt.Printf("DVM ERROR: error checking dirperm1: failed to unmount %s", err.Error())
+			glog.Errorf("error checking dirperm1: failed to unmount %s", err.Error())
 		}
 	})
 	return enableDirperm
@@ -207,7 +209,7 @@ func useDirperm() bool {
 
 func aufsUnmount(target string) error {
     if err := exec.Command("auplink", target, "flush").Run(); err != nil {
-        fmt.Printf("Couldn't run auplink before unmount: %s", err.Error())
+        glog.Errorf("Couldn't run auplink before unmount: %s", err.Error())
     }
     if err := syscall.Unmount(target, 0); err != nil {
         return err

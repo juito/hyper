@@ -1,9 +1,9 @@
 package docker
 
 import (
-	"fmt"
 	"net/url"
 	"os"
+	"dvm/lib/glog"
 )
 
 func (cli *DockerCli) SendCmdPull(args ...string) ([]byte, int, error) {
@@ -23,8 +23,8 @@ func (cli *DockerCli) SendCmdPull(args ...string) ([]byte, int, error) {
 	v := url.Values{}
 	v.Set("fromImage", repos)
 	v.Set("tag", tag)
-	fmt.Printf("The Repository is %s, and the tag is %s\n", repos, tag)
-	fmt.Printf("pull the image from the repository!\n")
+	glog.V(3).Infof("The Repository is %s, and the tag is %s\n", repos, tag)
+	glog.V(3).Info("pull the image from the repository!\n")
 	err := cli.Stream("POST", "/images/create?"+ v.Encode(), nil, os.Stdout, nil)
 	if err != nil {
 		return nil, -1, err

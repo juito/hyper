@@ -3,6 +3,7 @@ package daemon
 import (
 	"fmt"
 	"dvm/engine"
+	"dvm/lib/glog"
 )
 
 func (daemon *Daemon) CmdCreate(job *engine.Job) error {
@@ -27,7 +28,7 @@ func (daemon *Daemon) CmdCreate(job *engine.Job) error {
 	containerId := remoteInfo.Get("Id")
 	if containerId != "" {
 		v.Set("ContainerID", containerId)
-		fmt.Printf("The ContainerID is %s\n", containerId)
+		glog.V(3).Infof("The ContainerID is %s\n", containerId)
 	} else {
 		return fmt.Errorf("DVM ERROR: AN error encountered during creating container!\n")
 	}

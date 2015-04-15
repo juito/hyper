@@ -13,6 +13,7 @@ import (
 	"errors"
 	"io"
 	"strings"
+	"dvm/lib/glog"
 )
 
 // Now, the DVM will not support the TLS with docker.
@@ -173,7 +174,7 @@ func (cli *DockerCli) clientRequest(method, path string, in io.Reader, headers m
 
 		return nil, "", statusCode, fmt.Errorf("An error encountered returned from Docker daemon, %s\n", bytes.TrimSpace(body))
 	}
-	fmt.Printf("Finish the client request\n")
+	glog.V(3).Info("Finish the client request\n")
 	return resp.Body, resp.Header.Get("Content-Type"), statusCode, nil
 }
 
@@ -209,19 +210,19 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 }
 
 func (cli *DockerCli) Stream(method, path string, in io.Reader, stdout io.Writer, headers map[string][]string) error {
-	fmt.Printf("Ready to get the response from docker daemon\n")
+	glog.V(3).Info("Ready to get the response from docker daemon\n")
 	body, contentType, _, err := cli.clientRequest(method, path, in, headers)
 	if err != nil {
 		return err
 	}
 	defer body.Close()
-	fmt.Printf("Process the response data\n")
+	glog.V(3).Info("Process the response data\n")
 	if strings.Contains(contentType, "application/json") {
-		fmt.Printf("Process the response data with JSON\n")
+		glog.V(3).Info("Process the response data with JSON\n")
 		return DisplayJSONMessagesStream(body, stdout, 0, true)
 	}
 
-	fmt.Printf("Process the response data with pure copy\n")
+	glog.V(3).Info("Process the response data with pure copy\n")
 	if stdout != nil {
 		_, err := io.Copy(stdout, body)
 		if err != nil {

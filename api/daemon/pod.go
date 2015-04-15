@@ -1,10 +1,10 @@
 package daemon
 
 import (
-	"fmt"
 	"dvm/engine"
 	"dvm/api/pod"
 	"dvm/api/qemu"
+	"dvm/lib/glog"
 )
 
 func (daemon *Daemon) CmdPod(job *engine.Job) error {
@@ -13,7 +13,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("Began to run the QEMU process to start the VM!\n")
+	glog.V(3).Info("Began to run the QEMU process to start the VM!\n")
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
 	go qemu.QemuLoop(userPod.Name, qemuPodEvent, 1, 128)
 	runPodEvent := &qemu.RunPodCommand {

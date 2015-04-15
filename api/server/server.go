@@ -16,11 +16,13 @@ import (
 	"strings"
 	"crypto/tls"
 	"crypto/x509"
+
 	"github.com/gorilla/mux"
 	"dvm/api"
 	"dvm/engine"
 	"dvm/lib/portallocator"
 	"dvm/lib/version"
+	"dvm/lib/glog"
 )
 
 var (
@@ -120,7 +122,7 @@ func httpError(w http.ResponseWriter, err error) {
 	}
 
 	if err != nil {
-		fmt.Printf("HTTP Error: statusCode=%d %v", statusCode, err)
+		glog.Errorf("HTTP Error: statusCode=%d %v", statusCode, err)
 		http.Error(w, err.Error(), statusCode)
 	}
 }
@@ -174,7 +176,7 @@ func postContainerCreate(eng *engine.Engine, version version.Version, w http.Res
 		return nil
 	}
 
-	fmt.Printf("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	glog.V(3).Infof("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
 	job := eng.Job("create", r.Form.Get("imageName"))
 	stdoutBuf := bytes.NewBuffer(nil)
 	stderrBuf := bytes.NewBuffer(nil)
@@ -204,7 +206,7 @@ func postPodCreate(eng *engine.Engine, version version.Version, w http.ResponseW
 		return nil
 	}
 
-	fmt.Printf("DVM LOG: Args string is %s\n", r.Form.Get("podArgs"))
+	glog.V(3).Infof("DVM LOG: Args string is %s\n", r.Form.Get("podArgs"))
 	job := eng.Job("pod", r.Form.Get("podArgs"))
 
 	if err := job.Run(); err != nil {
@@ -218,7 +220,7 @@ func postImageCreate(eng *engine.Engine, version version.Version, w http.Respons
 		return nil
 	}
 
-	fmt.Printf("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	glog.V(3).Infof("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
 	job := eng.Job("pull", r.Form.Get("imageName"))
 	stdoutBuf := bytes.NewBuffer(nil)
 
@@ -234,7 +236,7 @@ func optionsHandler(eng *engine.Engine, version version.Version, w http.Response
 	return nil
 }
 func writeCorsHeaders(w http.ResponseWriter, r *http.Request, corsHeaders string) {
-	fmt.Printf("CORS header is enabled and set to: %s", corsHeaders)
+	glog.V(1).Infof("CORS header is enabled and set to: %s", corsHeaders)
 	w.Header().Add("Access-Control-Allow-Origin", corsHeaders)
 	w.Header().Add("Access-Control-Allow-Headers", "Origin, X-Requested-With, Content-Type, Accept, X-Registry-Auth")
 	w.Header().Add("Access-Control-Allow-Methods", "GET, POST, DELETE, PUT, OPTIONS")
@@ -248,16 +250,16 @@ func ping(eng *engine.Engine, version version.Version, w http.ResponseWriter, r 
 func makeHttpHandler(eng *engine.Engine, logging bool, localMethod string, localRoute string, handlerFunc HttpApiFunc, corsHeaders string, dockerVersion version.Version) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		// log the request
-		fmt.Printf("Calling %s %s\n", localMethod, localRoute)
+		glog.V(0).Infof("Calling %s %s\n", localMethod, localRoute)
 
 		if logging {
-			fmt.Printf("%s %s\n", r.Method, r.RequestURI)
+			glog.V(1).Infof("%s %s\n", r.Method, r.RequestURI)
 		}
 
 		if strings.Contains(r.Header.Get("User-Agent"), "Docker-Client/") {
 			userAgent := strings.Split(r.Header.Get("User-Agent"), "/")
 			if len(userAgent) == 2 && !dockerVersion.Equal(version.Version(userAgent[1])) {
-				fmt.Printf("Warning: client and server don't have the same version (client: %s, server: %s)", userAgent[1], dockerVersion)
+				glog.Warningf("client and server don't have the same version (client: %s, server: %s)", userAgent[1], dockerVersion)
 			}
 		}
 		version := version.Version(mux.Vars(r)["version"])
@@ -274,7 +276,7 @@ func makeHttpHandler(eng *engine.Engine, logging bool, localMethod string, local
 		}
 
 		if err := handlerFunc(eng, version, w, r, mux.Vars(r)); err != nil {
-			fmt.Printf("Handler for %s %s returned error: %s", localMethod, localRoute, err)
+			glog.Errorf("Handler for %s %s returned error: %s", localMethod, localRoute, err)
 			httpError(w, err)
 		}
 	}
@@ -337,7 +339,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 
 	for method, routes := range m {
 		for route, fct := range routes {
-			fmt.Printf("Registering %s, %s\n", method, route)
+			glog.V(0).Infof("Registering %s, %s\n", method, route)
 			// NOTE: scope issue, make sure the variables are local and won't be changed
 			localRoute := route
 			localFct := fct
@@ -439,7 +441,7 @@ func allocateDaemonPort(addr string) error {
 
 func setupTcpHttp(addr string, job *engine.Job) (*HttpServer, error) {
 	if !job.GetenvBool("TlsVerify") {
-		fmt.Printf("/!\\ DON'T BIND ON ANY IP ADDRESS WITHOUT setting -tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
+		glog.Warning("/!\\ DON'T BIND ON ANY IP ADDRESS WITHOUT setting -tlsverify IF YOU DON'T KNOW WHAT YOU'RE DOING /!\\")
 	}
 
 	r := createRouter(job.Eng, job.GetenvBool("Logging"), job.GetenvBool("EnableCors"), job.Getenv("CorsHeaders"), job.Getenv("Version"))
@@ -489,7 +491,7 @@ func ServeApi(job *engine.Job) error {
 			return fmt.Errorf("usage: %s PROTO://ADDR [PROTO://ADDR ...]", job.Name)
 		}
 		go func() {
-			fmt.Printf("Listening for HTTP on %s (%s)", protoAddrParts[0], protoAddrParts[1])
+			glog.V(0).Infof("Listening for HTTP on %s (%s)", protoAddrParts[0], protoAddrParts[1])
 			srv, err := NewServer(protoAddrParts[0], protoAddrParts[1], job)
 			if err != nil {
 				chErrors <- err
@@ -497,7 +499,7 @@ func ServeApi(job *engine.Job) error {
 			}
 			job.Eng.OnShutdown(func() {
 				if err := srv.Close(); err != nil {
-					fmt.Printf("[Error]: %s\n", err)
+					glog.Errorf("%s\n", err)
 				}
 			})
 			if err = srv.Serve(); err != nil && strings.Contains(err.Error(), "use of closed network connection") {

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 	"time"
+	"dvm/lib/glog"
 )
 
 // A job is the fundamental unit of work in the docker engine.
@@ -42,13 +43,13 @@ func (job *Job) Run() (err error) {
 		// Wait for all background tasks to complete
 		if job.closeIO {
 			if err := job.Stdout.Close(); err != nil {
-				fmt.Printf("Error: %s\n", err)
+				glog.Errorf("%s\n", err)
 			}
 			if err := job.Stderr.Close(); err != nil {
-				fmt.Printf("Error: %s\n", err)
+				glog.Errorf("%s\n", err)
 			}
 			if err := job.Stdin.Close(); err != nil {
-				fmt.Printf("Error: %s\n", err)
+				glog.Errorf("%s\n", err)
 			}
 		}
 	}()
@@ -74,13 +75,13 @@ func (job *Job) Run() (err error) {
 	}
 	// Log beginning and end of the job
 	if job.Eng.Logging {
-		fmt.Printf("+job %s\n", job.CallString())
+		glog.V(0).Infof("+job %s\n", job.CallString())
 		defer func() {
 			okerr := "OK"
 			if err != nil {
 				okerr = fmt.Sprintf("ERR: %s", err)
 			}
-			fmt.Printf("-job %s %s\n", job.CallString(), okerr)
+			glog.V(0).Infof("-job %s %s\n", job.CallString(), okerr)
 		}()
 	}
 

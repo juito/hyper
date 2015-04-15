@@ -9,6 +9,7 @@ import (
 	"dvm/lib/portallocator"
 	"dvm/api/docker"
 	"dvm/api/network"
+	"dvm/lib/glog"
 )
 
 type Daemon struct {
@@ -28,7 +29,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {
-		fmt.Printf("Engine Register: name= %s\n", name)
+		glog.V(3).Infof("Engine Register: name= %s\n", name)
 		if err := eng.Register(name, method); err != nil {
 			return err
 		}
@@ -48,7 +49,7 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	// register portallocator release on shutdown
 	eng.OnShutdown(func() {
 		if err := portallocator.ReleaseAll(); err != nil {
-			fmt.Printf("portallocator.ReleaseAll(): %s", err)
+			glog.Errorf("portallocator.ReleaseAll(): %s", err.Error())
 		}
 	})
 	// Check that the system is supported and we have sufficient privileges
@@ -71,7 +72,7 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	}
 
 	if err := network.InitNetwork("", "192.168.123.1/24"); err != nil {
-		fmt.Printf("InitNetwork failed\n")
+		glog.Errorf("InitNetwork failed, %s\n", err.Error())
 		return nil, err
 	}
 
@@ -88,7 +89,7 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 
 	eng.OnShutdown(func() {
 		if err := daemon.shutdown(); err != nil {
-			fmt.Printf("Error during daemon.shutdown(): %v", err)
+			glog.Errorf("Error during daemon.shutdown(): %v", err)
 		}
 	})
 
@@ -96,7 +97,7 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 }
 
 func (daemon *Daemon) shutdown() error {
-	fmt.Printf("The daemon will be shutdown\n")
+	glog.V(0).Info("The daemon will be shutdown\n")
 	return nil
 }
 

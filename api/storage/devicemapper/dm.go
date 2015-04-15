@@ -11,6 +11,8 @@ import (
 	"encoding/json"
 	"strings"
 	"strconv"
+
+	"dvm/lib/glog"
 )
 
 type jsonMetadata struct {
@@ -76,7 +78,7 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string)
 	createDeviceCommand := exec.Command("/bin/sh", "-c", createDeviceCmd)
 	_, err = createDeviceCommand.Output()
 	if err != nil {
-		fmt.Printf("Error while creating a new block device!\n")
+		glog.Error("Error while creating a new block device!\n")
 		return err
 	}
 
@@ -87,7 +89,7 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("The filesytem type is %s\n", fstype)
+	glog.V(3).Infof("The filesytem type is %s\n", fstype)
 	options := ""
 	if fstype == "xfs" {
 		// XFS needs nouuid or it can't mount filesystems with the same fs
