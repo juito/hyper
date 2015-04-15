@@ -5,6 +5,7 @@ import (
     "encoding/json"
     "net"
     "errors"
+    "log"
 )
 
 type QmpWelcome struct {
@@ -60,7 +61,7 @@ func (qmp *QmpError) MessageType() int { return QMP_ERROR }
 type QmpEvent struct {
     event       string
     timestamp   uint64
-    data        map[string]interface{}
+    data        interface{}
 }
 
 func (qmp *QmpEvent) MessageType() int { return QMP_EVENT }
@@ -76,12 +77,15 @@ func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
     seconds := genericGetField(t, "seconds")
     microseconds := genericGetField(t, "microseconds")
     data := genericGetField(msg, "data")
+    if data == nil {
+        data = make(map[string]interface{})
+    }
 
     if seconds != nil && microseconds != nil {
         return &QmpEvent{
             event: genericGetField(msg, "event").(string),
-            timestamp: seconds.(uint64) * 1000000 + microseconds.(uint64),
-            data: data.(map[string]interface{}),
+            timestamp: uint64(seconds.(float64)) * 1000000 + uint64(microseconds.(float64)),
+            data: data,
         },nil
     } else {
         return nil,errors.New("QMP Event parse failed")
@@ -116,18 +120,7 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
     }
 }
 
-func sockJsonReceive(c *net.UnixConn, b []byte) (*interface{}, error) {
-    nr, err := c.Read(b)
-    if err != nil {
-        return nil,err
-    }
-    var f interface{}
-    err = json.Unmarshal(b[:nr], &f)
-    return &f,err
-}
-
-func qmpReceiver(ch chan QmpInteraction, conn *net.UnixConn) {
-    decoder := json.NewDecoder(conn)
+func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
     for {
         var msg map[string]interface{}
         if err := decoder.Decode(&msg); err != nil {
@@ -146,36 +139,40 @@ func qmpReceiver(ch chan QmpInteraction, conn *net.UnixConn) {
     }
 }
 
-func qmpInit(s *net.UnixListener) (*net.UnixConn, error) {
-    buf := make([]byte, 1024)
+func qmpInit(s *net.UnixListener) (*net.UnixConn, *json.Decoder, error) {
+    var msg map[string]interface{}
 
     conn, err := s.AcceptUnix()
     if err != nil {
-        return nil, err
+        log.Print("accept socket error ", err.Error())
+        return nil, nil, err
     }
+    decoder := json.NewDecoder(conn)
 
-    _,err = sockJsonReceive(conn, buf)
+    err = decoder.Decode(&msg)
     if err != nil {
-        return nil, err
+        log.Print("get qmp welcome failed: ", err.Error())
+        return nil, nil, err
     }
 
     err = qmpCmdSend(conn, &QmpCommand{Execute:"qmp_capabilities"})
     if err != nil {
-        return nil,err
+        log.Print("qmp_capabilities send failed")
+        return nil, nil, err
     }
 
-
-    msg,err := sockJsonReceive(conn, buf)
+    err = decoder.Decode(&msg)
     if err != nil {
-        return nil, err
+        log.Print("response receive failed", err.Error())
+        return nil, nil, err
     }
 
-    res := (*msg).(map[string]interface{})
-    if _,ok:= res["return"]; ok {
-        return conn,nil
+    if _,ok:= msg["return"]; ok {
+        log.Print("QMP connection initialized")
+        return conn, decoder, nil
     }
 
-    return nil, fmt.Errorf("handshake failed")
+    return nil, nil, fmt.Errorf("handshake failed")
 }
 
 func scsiId2Name(id int) string {
@@ -284,9 +281,10 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
 }
 
 func qmpHandler(ctx *QemuContext) {
-    conn,err := qmpInit(ctx.qmpSock)
+    conn,decoder,err := qmpInit(ctx.qmpSock)
     if err != nil {
-        //should send back to hub
+        log.Print("failed to initialize QMP connection with qemu", err.Error())
+        //TODO: should send back to hub
         return
     }
 
@@ -294,7 +292,7 @@ func qmpHandler(ctx *QemuContext) {
     res := make(chan QmpInteraction, 128)
 
     //routine for get message
-    go qmpReceiver(ctx.qmp, conn)
+    go qmpReceiver(ctx.qmp, decoder)
 
     for {
         msg := <-ctx.qmp
@@ -323,10 +321,11 @@ func qmpHandler(ctx *QemuContext) {
             ev := msg.(*QmpEvent)
             ctx.hub <- ev
             if ev.event == QMP_EVENT_SHUTDOWN {
+                log.Print("got QMP shutdown event, quit...")
                 return
             }
         case QMP_INTERNAL_ERROR:
-            go qmpReceiver(ctx.qmp, conn)
+            go qmpReceiver(ctx.qmp, decoder)
         case QMP_QUIT:
             return
         }
