@@ -6,6 +6,7 @@ import (
     "net"
     "errors"
     "log"
+    "strconv"
 )
 
 type QmpWelcome struct {
@@ -189,14 +190,14 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=none,id=" + "scsi-disk" + string(id) + ",format" + format + ",cache=writeback",
+            filename + ",if=none,id=" + "scsi-disk" + strconv.Itoa(id) + ",format" + format + ",cache=writeback",
         },
     }
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"scsi-hd","bus":"scsi0","scsi-id":string(id),
-            "drive":"scsi-disk0","id": "scsi-disk" + string(id),
+            "driver":"scsi-hd","bus":"scsi0","scsi-id":strconv.Itoa(id),
+            "drive":"scsi-disk0","id": "scsi-disk" + strconv.Itoa(id),
         },
     }
     devName := scsiId2Name(id)
