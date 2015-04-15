@@ -157,6 +157,47 @@ func TestVolumeReady(t *testing.T) {
     t.Log(string(res))
 }
 
+func TestContainerCreated(t *testing.T) {
+    ctx := initContext("vmmid", nil, 1, 128)
+
+    spec := pod.UserPod{}
+    err := json.Unmarshal([]byte(testJson("basic")), &spec)
+    if err != nil {
+        t.Error("parse json failed ", err.Error())
+    }
+
+    ctx.InitDeviceContext(&spec, 0)
+
+    ready := &ContainerCreatedEvent{
+        Index:0,
+        Id:"a1b2c3d4",
+        Rootfs:"/rootfs",
+        Image:"/dev/dm7",
+        Fstype:"ext4",
+        Workdir:"/",
+        Cmd: []string{"run.sh","gogogo"},
+        Envs: map[string]string{
+            "JAVA_HOME":"/user/share/java",
+            "GOPATH":"/",
+        },
+    }
+
+    ctx.containerCreated(ready)
+
+    bevent := &BlockdevInsertedEvent{
+        Name: "/dev/dm7",
+        SourceType: "image",
+        DeviceName: "sda",
+    }
+    ctx.blockdevInserted(bevent)
+
+    res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+    if err != nil {
+        t.Error("vmspec to json failed")
+    }
+    t.Log(string(res))
+}
+
 func testJson(key string) string {
     jsons := make(map[string]string)
 
