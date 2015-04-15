@@ -219,6 +219,88 @@ func TestContainerCreated(t *testing.T) {
     t.Log(string(res))
 }
 
+func TestNetworkCreated(t *testing.T) {
+    ctx := initContext("vmmid", nil, 1, 128)
+
+    spec := pod.UserPod{}
+    err := json.Unmarshal([]byte(testJson("basic")), &spec)
+    if err != nil {
+        t.Error("parse json failed ", err.Error())
+    }
+
+    ctx.InitDeviceContext(&spec, 1)
+
+    dumpProgress(t, ctx.progress.adding)
+
+    ready := &ContainerCreatedEvent{
+        Index:0,
+        Id:"a1b2c3d4",
+        Rootfs:"/rootfs",
+        Image:"/dev/dm7",
+        Fstype:"ext4",
+        Workdir:"/",
+        Cmd: []string{"run.sh","gogogo"},
+        Envs: map[string]string{
+            "JAVA_HOME":"/user/share/java",
+            "GOPATH":"/",
+        },
+    }
+
+    ctx.containerCreated(ready)
+
+    bevent := &BlockdevInsertedEvent{
+        Name: "/dev/dm7",
+        SourceType: "image",
+        DeviceName: "sda",
+    }
+    ctx.blockdevInserted(bevent)
+
+    if ctx.deviceReady() {
+        t.Error("should not ready when network are not inserted")
+    }
+
+    ievent := &InterfaceCreated{
+        Index: 0,
+        PCIAddr: 4,
+        DeviceName: "eth0",
+        IpAddr: "192.168.12.34",
+        NetMask: "255.255.255.0",
+        RouteTable: []*RouteRule{
+            &RouteRule{
+                Destination:"192.168.12.0/24",
+                Gateway: "",
+                ViaThis: true,
+            },
+            &RouteRule{
+                Destination:"0.0.0.0/0",
+                Gateway: "192.168.12.1",
+                ViaThis: false,
+            },
+        },
+    }
+    ctx.interfaceCreated(ievent)
+
+    if ctx.deviceReady() {
+        t.Error("should not ready when network are not inserted")
+    }
+
+    fevent := &NetDevInsertedEvent{
+        Index: 0,
+        DeviceName: "eth0",
+    }
+    ctx.netdevInserted(fevent)
+
+    if !ctx.deviceReady() {
+        t.Error("after nic inserted, it should ready now")
+    }
+
+    res,err := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+    if err != nil {
+        t.Error("vmspec to json failed")
+    }
+    t.Log(string(res))
+}
+
 func testJson(key string) string {
     jsons := make(map[string]string)
 
