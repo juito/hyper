@@ -3,6 +3,7 @@ package qemu
 import (
 	"fmt"
 	"syscall"
+	"os"
 	"os/exec"
 	"path"
 	"strings"
@@ -161,7 +162,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 				// Make sure the v.Name is given
 				v.Source = path.Join("/var/tmp/", v.Name)
 				if _, err := os.Stat(v.Source); err != nil && os.IsNotExist(err) {
-					if err := os.MkdirAll(targetDir, os.FileMode(0777)); err != nil {
+					if err := os.MkdirAll(v.Source, os.FileMode(0777)); err != nil {
 						return "", nil
 					}
 				}
