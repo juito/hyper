@@ -434,6 +434,8 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
             Workdir: "",   Cmd:     nil,     Envs:    envs,
             RestartPolicy: restart,
         }
+
+        ctx.progress.adding.containers[i] = true
     }
 
     ctx.vmSpec = &VmPod{
