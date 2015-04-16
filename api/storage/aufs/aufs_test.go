@@ -16,6 +16,10 @@ var (
     diffTempDir = path.Join(aufsTempDir, "diff")
 )
 
+func init() {
+    aufsSupport = supportAufs()
+}
+
 func InitDir() error {
     if err := os.MkdirAll(aufsTempDir, 0755); err != nil {
         return err
@@ -54,7 +58,23 @@ func InitFile() error {
 }
 
 func supportAufs() bool {
-    return aufsSupport
+	// We can try to modprobe aufs first before looking at
+	// proc/filesystems for when aufs is supported
+	exec.Command("modprobe", "aufs").Run()
+
+	f, err := os.Open("/proc/filesystems")
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+
+	s := bufio.NewScanner(f)
+	for s.Scan() {
+		if strings.Contains(s.Text(), "aufs") {
+			return true
+		}
+	}
+	return false
 }
 
 func TestTempDirCreate(t *testing.T) {
