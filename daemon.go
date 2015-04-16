@@ -20,14 +20,14 @@ func mainDaemon() {
 	eng := engine.New()
 	d, err := daemon.NewDaemon(eng)
 	if err != nil {
-		glog.Error("the daemin create failed!\n")
+		glog.Error("the daemon create failed, %s\n", err.Error())
 		return
 	}
 
 	daemonInitWait := make(chan error)
 	// Install the accepted jobs
 	if err := d.Install(eng); err != nil {
-		glog.Error("the daemin install failed!\n")
+		glog.Error("the daemin install failed, %s\n", err.Error())
 		return
 	}
 
