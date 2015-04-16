@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"flag"
 	"strings"
 
 	"dvm/api/daemon"
@@ -11,6 +12,7 @@ import (
 )
 
 func main() {
+	flag.Parse()
 	mainDaemon()
 }
 
