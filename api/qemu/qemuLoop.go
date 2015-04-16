@@ -168,12 +168,12 @@ func printDebugOutput(tag string, out io.ReadCloser) {
     for {
         n,err:=out.Read(buf)
         if err == io.EOF {
-            glog.V(0).Info("%s finish", tag)
+            glog.V(0).Infof("%s finish", tag)
             break
         } else if err != nil {
             glog.Error(err)
         }
-        glog.V(0).Info("got %s: %s", tag, string(buf[:n]))
+        glog.V(0).Infof("got %s: %s", tag, string(buf[:n]))
     }
 }
 
@@ -198,7 +198,7 @@ func waitConsoleOutput(ctx *QemuContext) {
         }
 
         if buf[0] == '\n' && len(line) > 0 {
-            glog.V(0).Info("[console] %s", string(line[:len(line)-1]))
+            glog.V(0).Infof("[console] %s", string(line[:len(line)-1]))
             line = []byte{}
         } else {
             line = append(line, buf[0])
