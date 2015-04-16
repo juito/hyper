@@ -1,0 +1,13 @@
+{
+	"id": "test-container-create-1",
+	"containers" : [{
+	    "name": "web",
+	    "image": "tomcat:latest"
+	}],
+	"resource": {
+	    "vcpu": 1,
+	    "memory": 512
+	},
+	"files": [],
+	"volumes": []
+}
