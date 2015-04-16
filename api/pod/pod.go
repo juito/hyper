@@ -1,11 +1,11 @@
 package pod
 
 import (
-    "encoding/json"
     "fmt"
-    "io/ioutil"
     "os"
+    "io/ioutil"
     "crypto/rand"
+    "encoding/json"
 )
 
 // Pod Data Structure

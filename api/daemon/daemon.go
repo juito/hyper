@@ -10,10 +10,13 @@ import (
 	"dvm/api/docker"
 	"dvm/api/network"
 	"dvm/lib/glog"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type Daemon struct {
 	ID               string
+	db				 *leveldb.DB
 	eng              *engine.Engine
 	dockerCli		 *docker.DockerCli
 }
@@ -79,10 +82,17 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	var (
 		proto = "unix"
 		addr = "/var/run/docker.sock"
+		db_file = fmt.Sprintf("%s/%d.db", realRoot, os.Getpid())
 	)
+	db, err := leveldb.OpenFile(db_file, nil)
+	if err != nil {
+		glog.Errorf("open leveldb file failed, %s\n", err.Error())
+		return nil, err
+	}
 	dockerCli := docker.NewDockerCli("", proto, addr, nil)
 	daemon := &Daemon{
-		ID:               "1024",
+		ID:               string(os.Getpid()),
+		db:               db,
 		eng:              eng,
 		dockerCli:		  dockerCli,
 	}
@@ -96,8 +106,64 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	return daemon, nil
 }
 
+func (daemon *Daemon) WritePodToDB(podName string, podData []byte) error {
+	key := fmt.Sprintf("pod-%s", podName)
+	err := (daemon.db).Put([]byte(key), podData, nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (daemon *Daemon) GetPodByName(podName string) ([]byte, error) {
+	key := fmt.Sprintf("pod-%s", podName)
+	data, err := (daemon.db).Get([]byte(key), nil)
+	if err != nil {
+		return []byte(""), err
+	}
+	return data, nil
+}
+
+func (daemon *Daemon) DeletePodFromDB(podName string) error {
+	key := fmt.Sprintf("pod-%s", podName)
+	err := (daemon.db).Delete([]byte(key), nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (daemon *Daemon) WritePodAndVM(podName, vmid string) error {
+	key := fmt.Sprintf("pod-vm-%s", podName)
+	err := (daemon.db).Put([]byte(key), []byte(vmid), nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (daemon *Daemon) GetPodVmByName(podName string) ([]byte, error) {
+	key := fmt.Sprintf("pod-vm-%s", podName)
+	vmid, err := (daemon.db).Get([]byte(key), nil)
+	if err != nil {
+		return []byte(""), err
+	}
+	return vmid, nil
+}
+
+func (daemon *Daemon) DeletePodVmFromDB (podName string) error {
+	key := fmt.Sprintf("pod-vm-%s", podName)
+	err := (daemon.db).Delete([]byte(key), nil)
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (daemon *Daemon) shutdown() error {
 	glog.V(0).Info("The daemon will be shutdown\n")
+	(daemon.db).Close()
+	glog.Flush()
 	return nil
 }
 
