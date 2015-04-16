@@ -5,11 +5,12 @@ import (
     "bufio"
     "io/ioutil"
     "os"
-	"os.exec"
+	"os/exec"
     "path"
 	"path/filepath"
     "syscall"
     "sync"
+	"strconv"
 
 	"dvm/lib/glog"
 )
@@ -36,10 +37,10 @@ var (
 
 const MsRemount = syscall.MS_REMOUNT
 
-func mountContainerToSharedDir(containerId, rootDir, sharedDir string) (string, error) {
+func MountContainerToSharedDir(containerId, rootDir, sharedDir, mountLabel string) (string, error) {
     var (
-        mntPath = path.Join(rootDir, "mnt")
-        layersPath = path.Join(rootDir, "layers")
+        //mntPath = path.Join(rootDir, "mnt")
+        //layersPath = path.Join(rootDir, "layers")
         diffPath = path.Join(rootDir, "diff")
         mountPoint = path.Join(sharedDir, containerId, "rootfs")
     )
@@ -50,13 +51,13 @@ func mountContainerToSharedDir(containerId, rootDir, sharedDir string) (string, 
 	}
 
 	if err := aufsMount(layers, path.Join(diffPath, containerId), mountPoint, mountLabel); err != nil {
-		return "", fmt.Errorf("DVM ERROR: error creating aufs mount to %s: %v", target, err)
+		return "", fmt.Errorf("DVM ERROR: error creating aufs mount to %s: %v", mountPoint, err)
 	}
 
     return mountPoint, nil
 }
 
-func attachFiles(containerId, fromFile, toDir, rootDir, perm string) error {
+func AttachFiles(containerId, fromFile, toDir, rootDir, perm string) error {
 	if containerId == "" {
 		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
 	}
@@ -150,7 +151,7 @@ func aufsMount(ro []string, rw, target, mountLabel string) (err error) {
 				}
 				bp += copy(b[bp:], layer)
 			} else {
-				data := label.FormatMountLabel(fmt.Sprintf("append%s", layer), mountLabel)
+				data := FormatMountLabel(fmt.Sprintf("append%s", layer), mountLabel)
 				if err = syscall.Mount("none", target, "aufs", MsRemount, data); err != nil {
 					return
 				}
@@ -162,7 +163,7 @@ func aufsMount(ro []string, rw, target, mountLabel string) (err error) {
 			if useDirperm() {
 				opts += ",dirperm1"
 			}
-			data := label.FormatMountLabel(fmt.Sprintf("%s,%s", string(b[:bp]), opts), mountLabel)
+			data := FormatMountLabel(fmt.Sprintf("%s,%s", string(b[:bp]), opts), mountLabel)
 			if err = syscall.Mount("none", target, "aufs", 0, data); err != nil {
 				return
 			}
@@ -175,6 +176,24 @@ func aufsMount(ro []string, rw, target, mountLabel string) (err error) {
 	}
 
 	return
+}
+
+// FormatMountLabel returns a string to be used by the mount command.
+// The format of this string will be used to alter the labeling of the mountpoint.
+// The string returned is suitable to be used as the options field of the mount command.
+// If you need to have additional mount point options, you can pass them in as
+// the first parameter.  Second parameter is the label that you wish to apply
+// to all content in the mount point.
+func FormatMountLabel(src, mountLabel string) string {
+        if mountLabel != "" {
+                switch src {
+                case "":
+                        src = fmt.Sprintf("context=%q", mountLabel)
+                default:
+                        src = fmt.Sprintf("%s,context=%q", src, mountLabel)
+                }
+        }
+        return src
 }
 
 // useDirperm checks dirperm1 mount option can be used with the current
