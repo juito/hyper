@@ -112,7 +112,19 @@ func qmpCmdSend(c *net.UnixConn, cmd *QmpCommand) error {
 
 func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
     if r,ok := msg["return"] ; ok {
-        return &QmpResult{result:r.(map[string]interface{})}, nil
+        switch r.(type) {
+            case string:
+                return &QmpResult{result:map[string]interface{}{
+                    "return": r.(string),
+                }}, nil
+            case map[string]interface{}:
+                return &QmpResult{result:r.(map[string]interface{})}, nil
+            default:
+                return &QmpResult{result:map[string]interface{}{
+                    "return": nil,
+                }}, nil
+        }
+
     } else if r,ok := msg["error"] ; ok {
         m,_ := json.Marshal(msg)
         glog.V(2).Info("got error message", string(m))

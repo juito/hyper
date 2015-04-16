@@ -8,7 +8,9 @@ const (
     ShareDir    = "share_dir"
     Kernel      = "vmlinuz"
     Initrd      = "initrd.img"
+)
 
+const(
     EVENT_QEMU_EXIT = iota
     EVENT_INIT_CONNECTED
     EVENT_QMP_EVENT
@@ -27,7 +29,9 @@ const (
     COMMAND_RUN_POD
     COMMAND_SHUTDOWN
     COMMAND_ACK
+)
 
+const(
     QMP_SESSION = iota
     QMP_RESULT
     QMP_ERROR
@@ -35,7 +39,9 @@ const (
     QMP_EVENT
     QMP_INTERNAL_ERROR
     QMP_QUIT
+)
 
+const(
     INIT_SETDVM = iota
     INIT_STARTPOD
     INIT_GETPOD
@@ -45,9 +51,13 @@ const (
     INIT_READY
     INIT_ACK
     INIT_SHUTDOWN
+)
 
+const (
     QMP_EVENT_SHUTDOWN = "SHUTDOWN"
+)
 
+const (
     PREPARING_CONTAINER = iota
     PREPARING_VOLUME
     PREPARING_BLOCK
