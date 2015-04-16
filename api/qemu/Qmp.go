@@ -8,6 +8,7 @@ import (
     "log"
     "strconv"
     "dvm/lib/glog"
+    "time"
 )
 
 type QmpWelcome struct {
@@ -114,10 +115,13 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
     if r,ok := msg["return"] ; ok {
         switch r.(type) {
             case string:
+                glog.V(1).Info("get result string ", r.(string))
                 return &QmpResult{result:map[string]interface{}{
                     "return": r.(string),
                 }}, nil
             case map[string]interface{}:
+                m,_:=json.Marshal(r)
+                glog.V(1).Info("get result dict ", string(m))
                 return &QmpResult{result:r.(map[string]interface{})}, nil
             default:
                 return &QmpResult{result:map[string]interface{}{
@@ -205,13 +209,13 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=none,id=" + "scsi-disk" + strconv.Itoa(id) + ",format" + format + ",cache=writeback",
+            filename + ",if=scsi,id=" + "scsi-disk" + strconv.Itoa(id) + ",format=" + format + ",cache=writeback",
         },
     }
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"scsi-hd","bus":"scsi0","scsi-id":strconv.Itoa(id),
+            "driver":"scsi-hd","bus":"scsi0.0","scsi-id":strconv.Itoa(id),
             "drive":"scsi-disk0","id": "scsi-disk" + strconv.Itoa(id),
         },
     }
@@ -268,28 +272,41 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
             }
             return
         }
-        glog.V(1).Info("sending command ", string(msg))
-        conn.Write(msg)
 
-        res := <- feedback
-        switch res.MessageType() {
-            case QMP_RESULT:
-            //success
-            case QMP_ERROR:
-            handler <- &QmpFinish{
-                success: false,
-                reason: res.(*QmpError).cause,
-                callback: session.callback,
+        success := false
+        var qe *QmpError = nil
+        for repeat:=0; !success && repeat < 3; repeat++ {
+            glog.V(1).Infof("sending command (%d) %s", repeat + 1, string(msg))
+            conn.Write(msg)
+
+            res := <-feedback
+            switch res.MessageType() {
+                case QMP_RESULT:
+                success = true
+                break
+                //success
+                case QMP_ERROR:
+                glog.Warning("got one qmp error")
+                qe = res.(*QmpError)
+                time.Sleep(1000*time.Millisecond)
+                default:
+                //            response,_ := json.Marshal(*res)
+                handler <- &QmpFinish{
+                    success: false,
+                    reason: map[string]interface{}{
+                        "error": "unknown received message type",
+                        "response": []byte{},
+                    },
+                    callback: session.callback,
+                }
+                return
             }
-            return
-            default:
-//            response,_ := json.Marshal(*res)
+        }
+
+        if ! success {
             handler <- &QmpFinish{
                 success: false,
-                reason: map[string]interface{}{
-                    "error": "unknown received message type",
-                    "response": []byte{},
-                },
+                reason: qe.cause,
                 callback: session.callback,
             }
             return
