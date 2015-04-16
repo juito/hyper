@@ -21,14 +21,15 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 	}
 	fmt.Printf("User Pod Name is %s\n", userPod.Name)
 
-	body, err := ioutil.ReadFile(jsonFile)
+	jsonbody, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
 		return err
 	}
 
 	v := url.Values{}
-	v.Set("podArgs", string(body))
-	if body, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil)); err != nil {
+	v.Set("podArgs", string(jsonbody))
+	body, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil));
+	if err != nil {
 		return err
 	}
 	out := engine.NewOutput()
