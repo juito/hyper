@@ -146,5 +146,74 @@ func TestQmpNetSession(t *testing.T) {
     }
 
     info := msg.(*NetDevInsertedEvent)
+    t.Log("got net device", info.Address, info.Index, info.DeviceName)
+}
+
+func TestSessionQueue(t *testing.T) {
+    qemuChan := make(chan QemuEvent, 128)
+    ctx := initContext("vmid", qemuChan, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    ctx.qmp <- newNetworkAddSession(ctx, "12", "eth0", 0, 3)
+    ctx.qmp <- newNetworkAddSession(ctx, "13", "eth1", 1, 4)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != EVENT_INTERFACE_INSERTED {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*NetDevInsertedEvent)
     t.Log("got block device", info.Address, info.Index, info.DeviceName)
+    if info.Address != 0x03 || info.Index != 0 || info.DeviceName != "eth0" {
+        t.Error("net dev 0 creation failed")
+    }
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg = <- qemuChan
+    if msg.Event() != EVENT_INTERFACE_INSERTED {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info = msg.(*NetDevInsertedEvent)
+    t.Log("got block device", info.Address, info.Index, info.DeviceName)
+    if info.Address != 0x04 || info.Index != 1 || info.DeviceName != "eth1" {
+        t.Error("net dev 1 creation failed")
+    }
+
 }
