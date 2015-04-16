@@ -11,6 +11,7 @@ import (
     "io"
     "strings"
     "fmt"
+    "strconv"
 )
 
 // helpers
@@ -106,19 +107,28 @@ func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 // routines:
 
 func CreateInterface(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent) {
-    inf,err := network.Allocate("")
+    inf, err := network.Allocate("")
     if err != nil {
         log.Print("interface creating failed", err.Error())
         return
     }
 
-    ip,network,err := net.ParseCIDR(fmt.Sprintf("%s/%d", inf.IPAddress, inf.IPPrefixLen))
-    var tmp []byte = network.Mask
+    interfaceGot(index, pciAddr, name, isDefault, callback, inf)
+}
+
+func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent, inf *network.Settings) {
+
+    ip,nw,err := net.ParseCIDR(fmt.Sprintf("%s/%d", inf.IPAddress, inf.IPPrefixLen))
+    if err != nil {
+        log.Print("can not parse cidr")
+        return
+    }
+    var tmp []byte = nw.Mask
     var mask net.IP = tmp
 
     rt:=[]*RouteRule{
         &RouteRule{
-            Destination: fmt.Sprint("%s/%d", network.IP.String(), inf.IPPrefixLen),
+            Destination: fmt.Sprint("%s/%d", nw.IP.String(), inf.IPPrefixLen),
             Gateway:"", ViaThis:true,
         },
     }
@@ -133,6 +143,7 @@ func CreateInterface(index int, pciAddr int, name string, isDefault bool, callba
         Index:      index,
         PCIAddr:    pciAddr,
         DeviceName: name,
+        Fd:         strconv.FormatUint(uint64(inf.File.Fd()), 10),
         IpAddr:     ip.String(),
         NetMask:    mask.String(),
         RouteTable: rt,
