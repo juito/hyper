@@ -11,6 +11,7 @@ import (
     "dvm/api/pod"
     "dvm/engine"
 	dm "dvm/api/storage/devicemapper"
+	"dvm/lib/glog"
 )
 
 func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent) (string, error) {
@@ -80,14 +81,16 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 		}
 
 		if containerId != "" {
-			fmt.Printf("The ContainerID is %s\n", containerId)
+			glog.V(1).Infof("The ContainerID is %s", containerId)
 			var jsonResponse *docker.ConfigJSON
 			if jsonResponse, err = cli.GetContainerInfo(containerId); err != nil {
+				glog.Error("got error when get container Info ", err.Error())
 				return "", err
 			}
 
 			devFullName, err := dm.MountContainerToSharedDir(containerId, sharedDir, devPrefix)
 			if err != nil {
+				glog.Error("got error when mount container to share dir ", err.Error())
 				return "", err
 			}
 
@@ -100,6 +103,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 				}
 				err := dm.AttachFiles(containerId, devPrefix, fromFile, targetPath, rootPath, f.Perm)
 				if err != nil {
+					glog.Error("got error when attach files ", err.Error())
 					return "", err
 				}
 			}
@@ -108,8 +112,9 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 			for _, v := range jsonResponse.Config.Env {
 				env[v[:strings.Index(v, "=")]] = v[strings.Index(v, "=")+1:]
 			}
+			glog.V(1).Infof("Parsing envs for container %d: %d Evs", i, len(env))
             containerCreateEvent := &ContainerCreatedEvent {
-                Index: i+1,
+                Index: i,
                 Id: containerId,
                 Rootfs: "/rootfs",
                 Image: devFullName,
@@ -118,8 +123,10 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
                 Cmd: jsonResponse.Config.Cmd,
                 Envs: env,
             }
+			glog.V(1).Infof("container %d created %s", i, containerId)
             hub <- containerCreateEvent
 		} else {
+			glog.Error("no container Id got ", err.Error())
 			return "", fmt.Errorf("AN error encountered during creating container!\n")
 		}
 	}
