@@ -8,6 +8,7 @@ import (
     "log"
     "strconv"
     "dvm/lib/glog"
+    "time"
 )
 
 type QmpWelcome struct {
@@ -271,28 +272,41 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
             }
             return
         }
-        glog.V(1).Info("sending command ", string(msg))
-        conn.Write(msg)
 
-        res := <- feedback
-        switch res.MessageType() {
-            case QMP_RESULT:
-            //success
-            case QMP_ERROR:
-            handler <- &QmpFinish{
-                success: false,
-                reason: res.(*QmpError).cause,
-                callback: session.callback,
+        success := false
+        var qe *QmpError = nil
+        for repeat:=0; !success && repeat < 3; repeat++ {
+            glog.V(1).Infof("sending command (%d) %s", repeat + 1, string(msg))
+            conn.Write(msg)
+
+            res := <-feedback
+            switch res.MessageType() {
+                case QMP_RESULT:
+                success = true
+                break
+                //success
+                case QMP_ERROR:
+                glog.Warning("got one qmp error")
+                qe = res.(*QmpError)
+                time.Sleep(1000*time.Millisecond)
+                default:
+                //            response,_ := json.Marshal(*res)
+                handler <- &QmpFinish{
+                    success: false,
+                    reason: map[string]interface{}{
+                        "error": "unknown received message type",
+                        "response": []byte{},
+                    },
+                    callback: session.callback,
+                }
+                return
             }
-            return
-            default:
-//            response,_ := json.Marshal(*res)
+        }
+
+        if ! success {
             handler <- &QmpFinish{
                 success: false,
-                reason: map[string]interface{}{
-                    "error": "unknown received message type",
-                    "response": []byte{},
-                },
+                reason: qe.cause,
                 callback: session.callback,
             }
             return
