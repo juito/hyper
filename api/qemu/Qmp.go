@@ -242,8 +242,11 @@ func newNetworkAddSession(ctx *QemuContext, fd, device string, index, addr int) 
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"virtio-net-pci","netdev":device,"id":"net-" + busAddr,"bus":"pci.0","addr":busAddr,
-        },
+            "driver":"virtio-net-pci",
+            "netdev":device,
+            "bus":"pci.0",
+            "addr":busAddr,
+},
     }
 
 //    if len(fd) > 0 {
