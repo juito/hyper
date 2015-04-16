@@ -4,11 +4,12 @@ import (
     "testing"
     "encoding/json"
     "dvm/api/pod"
+    "os"
 )
 
 func TestInitContext(t *testing.T) {
 
-    ctx := initContext("vmid", nil, nil, 3, 202)
+    ctx,_ := initContext("vmid", nil, nil, 3, 202)
 
     if ctx.id != "vmid" {
         t.Error("id should be vmid, but is ", ctx.id)
@@ -24,6 +25,17 @@ func TestInitContext(t *testing.T) {
     ctx.Close()
 }
 
+func TestFailInitContext(t *testing.T) {
+    os.Remove("/var/run/dvm/vmid/dvm.sock")
+    err := os.MkdirAll("/var/run/dvm/vmid/dvm.sock/something/whatever", 777)
+    _,err = initContext("vmid", nil, nil, 3, 202)
+    if err == nil {
+        t.Error("should not complete")
+    } else {
+        t.Log("should get an error", err.Error())
+    }
+}
+
 func TestRemoveSock(t *testing.T) {
     initContext("vmid", nil, nil, 1, 128)
     initContext("vmid", nil, nil, 1, 128)
@@ -31,7 +43,7 @@ func TestRemoveSock(t *testing.T) {
 }
 
 func TestParseSpec(t *testing.T) {
-    ctx := initContext("vmmid", nil, nil, 1, 128)
+    ctx,_ := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)
@@ -69,7 +81,7 @@ func TestParseSpec(t *testing.T) {
 }
 
 func TestParseVolumes(t *testing.T) {
-    ctx := initContext("vmmid", nil, nil, 1, 128)
+    ctx,_ := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
@@ -117,7 +129,7 @@ func TestParseVolumes(t *testing.T) {
 }
 
 func TestVolumeReady(t *testing.T) {
-    ctx := initContext("vmmid", nil, nil, 1, 128)
+    ctx,_ := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
@@ -165,7 +177,7 @@ func dumpProgress(t *testing.T, pm *processingMap) {
 }
 
 func TestContainerCreated(t *testing.T) {
-    ctx := initContext("vmmid", nil, nil, 1, 128)
+    ctx,_ := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)
@@ -220,7 +232,7 @@ func TestContainerCreated(t *testing.T) {
 }
 
 func TestNetworkCreated(t *testing.T) {
-    ctx := initContext("vmmid", nil, nil, 1, 128)
+    ctx,_ := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)
