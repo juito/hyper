@@ -168,12 +168,12 @@ func printDebugOutput(tag string, out io.ReadCloser) {
     for {
         n,err:=out.Read(buf)
         if err == io.EOF {
-            glog.V(1).Info("%s finish", tag)
+            glog.V(0).Info("%s finish", tag)
             break
         } else if err != nil {
             glog.Error(err)
         }
-        glog.V(1).Info("got %s: %s", tag, string(buf[:n]))
+        glog.V(0).Info("got %s: %s", tag, string(buf[:n]))
     }
 }
 
@@ -198,7 +198,7 @@ func waitConsoleOutput(ctx *QemuContext) {
         }
 
         if buf[0] == '\n' && len(line) > 0 {
-            glog.V(1).Info("[console] %s", string(line[:len(line)-1]))
+            glog.V(0).Info("[console] %s", string(line[:len(line)-1]))
             line = []byte{}
         } else {
             line = append(line, buf[0])
@@ -216,7 +216,7 @@ func launchQemu(ctx *QemuContext) {
 
     args := ctx.QemuArguments()
 
-    glog.V(1).Info("cmdline arguments: ", strings.Join(args, " "))
+    glog.V(0).Info("cmdline arguments: ", strings.Join(args, " "))
 
     cmd := exec.Command(qemu, args...)
 
@@ -239,7 +239,7 @@ func launchQemu(ctx *QemuContext) {
         return
     }
 
-    glog.V(1).Info("Waiting for command to finish...")
+    glog.V(0).Info("Waiting for command to finish...")
 
     err = cmd.Wait()
     glog.Info("qemu exit with ", err.Error())
