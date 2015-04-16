@@ -2,11 +2,11 @@ package qemu
 
 import (
     "os/exec"
-    "log"
     "net"
     "dvm/api/pod"
     "dvm/api/network"
     "dvm/api/types"
+    "dvm/lib/glog"
     "encoding/json"
     "io"
     "strings"
@@ -102,7 +102,16 @@ func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 func CreateInterface(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent) {
     inf, err := network.Allocate("")
     if err != nil {
-        log.Print("interface creating failed", err.Error())
+        glog.Error("interface creating failed", err.Error())
+        callback <- &InterfaceCreated{
+            Index:      index,
+            PCIAddr:    pciAddr,
+            DeviceName: name,
+            Fd:         "",
+            IpAddr:     "",
+            NetMask:    "",
+            RouteTable: nil,
+        }
         return
     }
 
@@ -113,7 +122,16 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
 
     ip,nw,err := net.ParseCIDR(fmt.Sprintf("%s/%d", inf.IPAddress, inf.IPPrefixLen))
     if err != nil {
-        log.Print("can not parse cidr")
+        glog.Error("can not parse cidr")
+        callback <- &InterfaceCreated{
+            Index:      index,
+            PCIAddr:    pciAddr,
+            DeviceName: name,
+            Fd:         "",
+            IpAddr:     "",
+            NetMask:    "",
+            RouteTable: nil,
+        }
         return
     }
     var tmp []byte = nw.Mask
@@ -150,12 +168,12 @@ func printDebugOutput(tag string, out io.ReadCloser) {
     for {
         n,err:=out.Read(buf)
         if err == io.EOF {
-            log.Printf("%s finish", tag)
+            glog.V(1).Info("%s finish", tag)
             break
         } else if err != nil {
-            log.Fatal(err)
+            glog.Error(err)
         }
-        log.Printf("got %s: %s", tag, string(buf[:n]))
+        glog.V(1).Info("got %s: %s", tag, string(buf[:n]))
     }
 }
 
@@ -164,7 +182,7 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     conn, err := ctx.consoleSock.AcceptUnix()
     if err != nil {
-        log.Println(err.Error())
+        glog.Warning(err.Error())
         return
     }
 
@@ -172,15 +190,15 @@ func waitConsoleOutput(ctx *QemuContext) {
     for {
         _,err := conn.Read(buf)
         if err == io.EOF {
-            log.Println("The end")
+            glog.Info("The end")
             return
         } else if err != nil {
-            log.Println("Unhandled error ", err.Error())
+            glog.Warning("Unhandled error ", err.Error())
             return
         }
 
         if buf[0] == '\n' && len(line) > 0 {
-            log.Printf("[console] %s", string(line[:len(line)-1]))
+            glog.V(1).Info("[console] %s", string(line[:len(line)-1]))
             line = []byte{}
         } else {
             line = append(line, buf[0])
@@ -198,13 +216,13 @@ func launchQemu(ctx *QemuContext) {
 
     args := ctx.QemuArguments()
 
-    log.Println("cmdline arguments: ", strings.Join(args, " "))
+    glog.V(1).Info("cmdline arguments: ", strings.Join(args, " "))
 
     cmd := exec.Command(qemu, args...)
 
     stderr,err := cmd.StderrPipe()
     if err != nil {
-        log.Println("Cannot get stderr of qemu")
+        glog.Warning("Cannot get stderr of qemu")
     }
 
 //    stdout, err := cmd.StdoutPipe()
@@ -216,15 +234,15 @@ func launchQemu(ctx *QemuContext) {
     go printDebugOutput("stderr", stderr)
 
     if err := cmd.Start();err != nil {
-        log.Println("try to start qemu failed")
+        glog.Error("try to start qemu failed")
         ctx.hub <- &QemuExitEvent{message:"try to start qemu failed"}
         return
     }
 
-    log.Println("Waiting for command to finish...")
+    glog.V(1).Info("Waiting for command to finish...")
 
     err = cmd.Wait()
-    log.Println("qemu exit with ", err.Error())
+    glog.Info("qemu exit with ", err.Error())
     ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
 }
 
@@ -263,14 +281,14 @@ func runPod(ctx *QemuContext) {
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
-        log.Print("Qemu has exit")
+        glog.Info("Qemu has exit")
         ctx.Close()
         ctx.Become(stateCleaningUp)
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.event == QMP_EVENT_SHUTDOWN {
-            log.Print("Got QMP shutdown event")
+            glog.Info("Got QMP shutdown event")
             ctx.Close()
             ctx.Become(stateCleaningUp)
             return true
@@ -296,15 +314,20 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     // TODO: fail exit
                 }
             case COMMAND_RUN_POD:
-                log.Print("got spec, prepare devices")
+                glog.Info("got spec, prepare devices")
                 prepareDevice(ctx, ev.(*RunPodCommand).Spec)
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_STARTPOD {
-                    log.Print("run success", string(ack.msg))
+                    glog.Info("run success", string(ack.msg))
+                    ctx.client <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_OK,
+                        Cause: "Start POD success",
+                    }
                     ctx.Become(stateRunning)
                 } else {
-                    log.Print("wrong reply to ", string(ack.reply), string(ack.msg))
+                    glog.Warning("wrong reply to ", string(ack.reply), string(ack.msg))
                 }
             case EVENT_CONTAINER_ADD:
                 info := ev.(*ContainerCreatedEvent)
@@ -332,9 +355,16 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 }
             case EVENT_INTERFACE_ADD:
                 info := ev.(*InterfaceCreated)
-                //addr := ctx.nextPciAddr()
-                ctx.interfaceCreated(info)
-                ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
+                if info.IpAddr != "" {
+                    ctx.interfaceCreated(info)
+                    ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
+                } else {
+                    ctx.client <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_DEVICE_FAIL,
+                        Cause: fmt.Sprintf("network interface %d creation fail", info.Index),
+                    }
+                }
             case EVENT_INTERFACE_INSERTED:
                 info := ev.(*NetDevInsertedEvent)
                 ctx.netdevInserted(info)
@@ -349,7 +379,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
             default:
-                log.Print("got event during pod running")
+                glog.Warning("got event during pod running")
         }
     }
 }
@@ -360,10 +390,10 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_SHUTDOWN {
-                    log.Print("Shutting down", string(ack.msg))
+                    glog.Info("Shutting down", string(ack.msg))
                     ctx.Become(stateRunning)
                 } else {
-                    log.Print("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
+                    glog.Warning("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
                 }
         }
     }
@@ -384,7 +414,7 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
     if err != nil {
         client <- &types.QemuResponse{
             VmId: dvmId,
-            Code: types.E_INIT_FAIL,
+            Code: types.E_CONTEXT_INIT_FAIL,
             Cause: err.Error(),
         }
         return
