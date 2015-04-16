@@ -7,6 +7,7 @@ import (
     "errors"
     "log"
     "strconv"
+    "dvm/lib/glog"
 )
 
 type QmpWelcome struct {
@@ -113,6 +114,8 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
     if r,ok := msg["return"] ; ok {
         return &QmpResult{result:r.(map[string]interface{})}, nil
     } else if r,ok := msg["error"] ; ok {
+        m,_ := json.Marshal(msg)
+        glog.V(2).Info("got error message", string(m))
         return &QmpError{cause:r.(map[string]interface{})}, nil
     } else if _,ok := msg["event"] ; ok {
         return parseQmpEvent(msg)
@@ -227,9 +230,9 @@ func newNetworkAddSession(ctx *QemuContext, fd, device string, index, addr int) 
         },
     }
 
-    if len(fd) > 0 {
-        (*commands[0]).Arguments["fd"] = fd
-    }
+//    if len(fd) > 0 {
+//        (*commands[0]).Arguments["fd"] = fd
+//    }
     return &QmpSession{
         commands: commands,
         callback: &NetDevInsertedEvent{
@@ -253,6 +256,7 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
             }
             return
         }
+        glog.V(1).Info("sending command ", string(msg))
         conn.Write(msg)
 
         res := <- feedback
@@ -265,6 +269,7 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
                 reason: res.(*QmpError).cause,
                 callback: session.callback,
             }
+            return
             default:
 //            response,_ := json.Marshal(*res)
             handler <- &QmpFinish{
@@ -303,20 +308,23 @@ func qmpHandler(ctx *QemuContext) {
         msg := <-ctx.qmp
         switch msg.MessageType() {
         case QMP_SESSION:
+            glog.Info("got new session")
             buf = append(buf, msg.(*QmpSession))
             if len(buf) == 1 {
                 go qmpCommander(ctx.qmp, conn, msg.(*QmpSession), res)
             }
         case QMP_FINISH:
-            buf = buf[1:]
-            if len(buf) > 0 {
-                go qmpCommander(ctx.qmp, conn, buf[0], res)
-            }
+            glog.Infof("session finished, buffer size %d", len(buf))
             r := msg.(*QmpFinish)
             if r.success {
+                glog.V(1).Info("success ")
                 ctx.hub <- r.callback
             } else {
                 // TODO: fail...
+            }
+            buf = buf[1:]
+            if len(buf) > 0 {
+                go qmpCommander(ctx.qmp, conn, buf[0], res)
             }
         case QMP_RESULT:
             res <- msg

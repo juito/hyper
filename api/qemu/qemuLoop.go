@@ -253,7 +253,7 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     if networks > 0 {
         // TODO: go create interfaces here
         for i:=0; i < networks; i++ {
-            name := fmt.Sprint("eth%d", i)
+            name := fmt.Sprintf("eth%d", i)
             addr := ctx.nextPciAddr()
             go CreateInterface(i, addr, name, i == 0, ctx.hub)
         }
