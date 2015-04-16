@@ -26,7 +26,7 @@ const (
 	defaultCertFile = "cert.pem"
 	defaultHostAddress = "unix:///var/run/docker.sock"
 	defaultProto = "unix"
-	dockerClientVersion = "1.4"
+	dockerClientVersion = "1.17"
 )
 // Define some common configuration of the Docker daemon
 type DockerConfig struct {
