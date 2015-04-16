@@ -114,10 +114,13 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
     if r,ok := msg["return"] ; ok {
         switch r.(type) {
             case string:
+                glog.V(1).Info("get result string ", r.(string))
                 return &QmpResult{result:map[string]interface{}{
                     "return": r.(string),
                 }}, nil
             case map[string]interface{}:
+                m,_:=json.Marshal(r)
+                glog.V(1).Info("get result dict ", string(m))
                 return &QmpResult{result:r.(map[string]interface{})}, nil
             default:
                 return &QmpResult{result:map[string]interface{}{
@@ -205,13 +208,13 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=none,id=" + "scsi-disk" + strconv.Itoa(id) + ",format" + format + ",cache=writeback",
+            filename + ",if=scsi,id=" + "scsi-disk" + strconv.Itoa(id) + ",format=" + format + ",cache=writeback",
         },
     }
     commands[1] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
-            "driver":"scsi-hd","bus":"scsi0","scsi-id":strconv.Itoa(id),
+            "driver":"scsi-hd","bus":"scsi0.0","scsi-id":strconv.Itoa(id),
             "drive":"scsi-disk0","id": "scsi-disk" + strconv.Itoa(id),
         },
     }
