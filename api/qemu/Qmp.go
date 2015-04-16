@@ -209,7 +209,7 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
         Execute: "human-monitor-command",
         Arguments: map[string]interface{}{
             "command-line":"drive_add dummy file=" +
-            filename + ",if=scsi,id=" + "scsi-disk" + strconv.Itoa(id) + ",format=" + format + ",cache=writeback",
+            filename + ",if=none,id=" + "scsi-disk" + strconv.Itoa(id) + ",format=" + format + ",cache=writeback",
         },
     }
     commands[1] = &QmpCommand{
