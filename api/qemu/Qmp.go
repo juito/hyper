@@ -9,6 +9,7 @@ import (
     "strconv"
     "dvm/lib/glog"
     "time"
+    "syscall"
 )
 
 type QmpWelcome struct {
@@ -53,6 +54,7 @@ func (qmp *QmpFinish) MessageType() int { return QMP_FINISH }
 type QmpCommand struct {
     Execute string `json:"execute"`
     Arguments map[string]interface{} `json:"arguments,omitempty"`
+    Scm []byte `json:"-"`
 }
 
 type QmpResult struct { result map[string]interface{} }
@@ -128,7 +130,6 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
                     "return": nil,
                 }}, nil
         }
-
     } else if r,ok := msg["error"] ; ok {
         m,_ := json.Marshal(msg)
         glog.V(2).Info("got error message", string(m))
@@ -152,6 +153,16 @@ func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
             ch <- &QmpInternalError{cause:err.Error()}
             return
         }
+
+        if qmp.MessageType() == QMP_ERROR {
+            if c,ok := qmp.(*QmpError).cause["desc"]; ok {
+                if c == "Invalid JSON syntax" {
+                    glog.V(1).Info("dirty ignore syntax problem")
+                    continue
+                }
+            }
+        }
+
         ch <- qmp
         if qmp.MessageType() == QMP_EVENT && qmp.(*QmpEvent).event == QMP_EVENT_SHUTDOWN {
             return
@@ -230,28 +241,34 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
     }
 }
 
-func newNetworkAddSession(ctx *QemuContext, fd, device string, index, addr int) *QmpSession {
+func newNetworkAddSession(ctx *QemuContext, fd uint64, device string, index, addr int) *QmpSession {
     busAddr := fmt.Sprintf("0x%x", addr)
-    commands := make([]*QmpCommand, 2)
+    commands := make([]*QmpCommand, 3)
+    scm := syscall.UnixRights(int(fd))
+    glog.V(1).Infof("send net to qemu at %d", int(fd))
     commands[0] = &QmpCommand{
-        Execute: "netdev_add",
+        Execute: "getfd",
         Arguments: map[string]interface{}{
-            "type":"tap","id":device,"script":"no",
+            "fdname":"fd"+device,
         },
+        Scm:scm,
     }
     commands[1] = &QmpCommand{
+        Execute: "netdev_add",
+        Arguments: map[string]interface{}{
+            "type":"tap","id":device,"fd":"fd"+device,
+        },
+    }
+    commands[2] = &QmpCommand{
         Execute: "device_add",
         Arguments: map[string]interface{}{
             "driver":"virtio-net-pci",
             "netdev":device,
             "bus":"pci.0",
             "addr":busAddr,
-},
+        },
     }
 
-//    if len(fd) > 0 {
-//        (*commands[0]).Arguments["fd"] = fd
-//    }
     return &QmpSession{
         commands: commands,
         callback: &NetDevInsertedEvent{
@@ -279,8 +296,17 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
         success := false
         var qe *QmpError = nil
         for repeat:=0; !success && repeat < 3; repeat++ {
-            glog.V(1).Infof("sending command (%d) %s", repeat + 1, string(msg))
-            conn.Write(msg)
+
+            if len(cmd.Scm) > 0 {
+                glog.V(1).Infof("send cmd with scm (%d) %s", repeat +1 , string(msg))
+                f,_ := conn.File()
+                fd := f.Fd()
+                syscall.Sendmsg(int(fd), msg, cmd.Scm, nil, 0)
+                conn.Write(cmd.Scm)
+            } else {
+                glog.V(1).Infof("sending command (%d) %s", repeat + 1, string(msg))
+                conn.Write(msg)
+            }
 
             res := <-feedback
             switch res.MessageType() {

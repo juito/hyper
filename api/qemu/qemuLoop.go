@@ -11,7 +11,6 @@ import (
     "io"
     "strings"
     "fmt"
-    "strconv"
 )
 
 // Event messages for chan-ctrl
@@ -67,7 +66,7 @@ type BlockdevInsertedEvent struct {
 type InterfaceCreated struct {
     Index       int
     PCIAddr     int
-    Fd          string
+    Fd          uint64
     DeviceName  string
     IpAddr      string
     NetMask     string
@@ -107,7 +106,7 @@ func CreateInterface(index int, pciAddr int, name string, isDefault bool, callba
             Index:      index,
             PCIAddr:    pciAddr,
             DeviceName: name,
-            Fd:         "",
+            Fd:         0,
             IpAddr:     "",
             NetMask:    "",
             RouteTable: nil,
@@ -127,7 +126,7 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
             Index:      index,
             PCIAddr:    pciAddr,
             DeviceName: name,
-            Fd:         "",
+            Fd:         0,
             IpAddr:     "",
             NetMask:    "",
             RouteTable: nil,
@@ -154,7 +153,7 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
         Index:      index,
         PCIAddr:    pciAddr,
         DeviceName: name,
-        Fd:         strconv.FormatUint(uint64(inf.File.Fd()), 10),
+        Fd:         uint64(inf.File.Fd()),
         IpAddr:     ip.String(),
         NetMask:    mask.String(),
         RouteTable: rt,
