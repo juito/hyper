@@ -249,6 +249,8 @@ func launchQemu(ctx *QemuContext) {
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     networks := 1
     ctx.InitDeviceContext(spec, networks)
+    res,_ := json.MarshalIndent(*ctx.vmSpec, "    ", "    ")
+    glog.V(2).Info("initial vm spec: ",string(res))
     go CreateContainer(spec, ctx.shareDir, ctx.hub)
     if networks > 0 {
         // TODO: go create interfaces here
@@ -428,6 +430,7 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
 
     for context != nil && context.handler != nil {
         ev := <-context.hub
+        glog.V(1).Infof("main event loop got message %d", ev.Event())
         context.handler(context, ev)
     }
 }
