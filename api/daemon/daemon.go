@@ -66,11 +66,15 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 		return nil, err
 	}
 
-	os.Setenv("TMPDIR", "/var/tmp/dvm/")
+	var tempdir = "/var/run/dvm/"
+	os.Setenv("TMPDIR", tempdir)
+	if err := os.MkdirAll(tempdir, 0755); err != nil && !os.IsExist(err) {
+		return nil, err
+	}
 
 	var realRoot = "/var/run/dvm/"
 	// Create the root directory if it doesn't exists
-	if err := os.MkdirAll(realRoot, 0700); err != nil && !os.IsExist(err) {
+	if err := os.MkdirAll(realRoot, 0755); err != nil && !os.IsExist(err) {
 		return nil, err
 	}
 
