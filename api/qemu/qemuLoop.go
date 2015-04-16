@@ -128,7 +128,7 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
 
     rt:=[]*RouteRule{
         &RouteRule{
-            Destination: fmt.Sprint("%s/%d", nw.IP.String(), inf.IPPrefixLen),
+            Destination: fmt.Sprintf("%s/%d", nw.IP.String(), inf.IPPrefixLen),
             Gateway:"", ViaThis:true,
         },
     }
