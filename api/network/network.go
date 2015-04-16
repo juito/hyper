@@ -35,6 +35,7 @@ var (
 	ipAllocator	= ipallocator.New()
 	bridgeIPv4Net	*net.IPNet
 	bridgeIface	string
+	tapFile		*os.File
 )
 
 type ifReq struct {
@@ -665,8 +666,10 @@ func AddToBridge(iface, master *net.Interface) error {
 }
 
 func Allocate(requestedIP string) (*Settings, error) {
-	var req ifReq
-	var errno syscall.Errno
+	var (
+		req ifReq
+		errno syscall.Errno
+	)
 
 	ip, err := ipAllocator.RequestIP(bridgeIPv4Net, net.ParseIP(requestedIP))
 	if err != nil {
@@ -675,51 +678,51 @@ func Allocate(requestedIP string) (*Settings, error) {
 
 	maskSize, _ := bridgeIPv4Net.Mask.Size()
 
-	file, err := os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
+	tapFile, err = os.OpenFile("/dev/net/tun", os.O_RDWR, 0)
 	if err != nil {
 		return nil, err
 	}
 
 	req.Flags = CIFF_TAP
-	_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, file.Fd(),
+	_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, tapFile.Fd(),
 				      uintptr(syscall.TUNSETIFF),
 				      uintptr(unsafe.Pointer(&req)))
 	if errno != 0 {
 		err = fmt.Errorf("create tap device failed\n")
-		file.Close()
+		tapFile.Close()
 		return nil, err
 	}
 
 	device := strings.Trim(string(req.Name[:]), "\x00")
 
-
 	tapIface, err := net.InterfaceByName(device)
 	if err != nil {
 		fmt.Printf("get interface by name %s failed %s\n", device, err)
-		file.Close()
+		tapFile.Close()
 		return nil, err
 	}
 
 	bIface, err := net.InterfaceByName(bridgeIface)
 	if err != nil {
 		fmt.Printf("get interface by name %s failed\n", bridgeIface)
-		file.Close()
+		tapFile.Close()
 		return nil, err
 	}
 
 	err = AddToBridge(tapIface, bIface)
 	if err != nil {
 		fmt.Printf("Add to bridge failed %s %s\n", bridgeIface, device)
-		file.Close()
+		tapFile.Close()
 		return nil, err
 	}
+
 	networkSettings := &Settings{
 		IPAddress:	ip.String(),
 		Gateway:	bridgeIPv4Net.IP.String(),
 		Bridge:		bridgeIface,
 		IPPrefixLen:	maskSize,
 		Device:		device,
-		File:		file,
+		File:		tapFile,
 	}
 
 	return networkSettings, nil
