@@ -20,7 +20,6 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 	}
 	fmt.Printf("User Pod Name is %s\n", userPod.Name)
 
-    // TODO: we need to transfer this data from client to daemon
 	body, err := ioutil.ReadFile(jsonFile)
 	if err != nil {
 		return err
@@ -28,8 +27,27 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 
 	v := url.Values{}
 	v.Set("podArgs", string(body))
-	if _, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil)); err != nil {
+	if body, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil)); err != nil {
 		return err
+	}
+	out := engine.NewOutput()
+	remoteInfo, err := out.AddEnv()
+	if err != nil {
+		return err
+	}
+
+	if _, err := out.Write(body); err != nil {
+		fmt.Printf("Error reading remote info: %s", err)
+		return err
+	}
+	out.Close()
+	if remoteInfo.Exists("ID") {
+		fmt.Printf("Pod ID: %s\n", remoteInfo.Get("ID"))
+	}
+	// TODO we need to get the qemu response and process them
+	if remoteInfo.GetInt("Code") == 0 {
+	}
+	if remoteInfo.Get("Cause") == "" {
 	}
 	return nil
 }
