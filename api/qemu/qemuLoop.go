@@ -14,13 +14,6 @@ import (
     "strconv"
 )
 
-// helpers
-type recoverOp func()
-
-func cleanup(op recoverOp) {
-    if err := recover(); err != nil { op() }
-}
-
 // Event messages for chan-ctrl
 
 type QemuEvent interface {
@@ -387,7 +380,15 @@ func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
 // main loop
 
 func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) {
-    context := initContext(dvmId, hub, client, cpu, memory)
+    context,err := initContext(dvmId, hub, client, cpu, memory)
+    if err != nil {
+        client <- &types.QemuResponse{
+            VmId: dvmId,
+            Code: types.E_INIT_FAIL,
+            Cause: err.Error(),
+        }
+        return
+    }
 
     //launch routines
     go qmpHandler(context)

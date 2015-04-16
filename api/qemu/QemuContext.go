@@ -8,6 +8,7 @@ import (
     "dvm/api/pod"
     "log"
     "dvm/api/types"
+    "dvm/lib/glog"
 )
 
 type QemuContext struct {
@@ -114,11 +115,13 @@ func newProcessingList() *processingList{
     }
 }
 
-func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) *QemuContext {
+func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) (*QemuContext,error) {
+
+    var err error = nil
 
     qmpChannel := make(chan QmpInteraction, 128)
     vmChannel  := make(chan *DecodedMessage, 128)
-    defer cleanup(func(){ close(qmpChannel);close(vmChannel)})
+    defer func(){ if err != nil {close(qmpChannel);close(vmChannel)}}()
 
     //dir and sockets:
     homeDir := BaseDir + "/" + id + "/"
@@ -127,11 +130,12 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
     consoleSockName := homeDir + ConsoleSockName
     shareDir    := homeDir + ShareDir
 
-    err := os.MkdirAll(shareDir, 0755)
+    err = os.MkdirAll(shareDir, 0755)
     if err != nil {
-        panic(err)
+        glog.Error("cannot make dir", shareDir, err.Error())
+        return nil,err
     }
-    defer cleanup(func(){os.RemoveAll(homeDir)})
+    defer func(){ if err != nil {os.RemoveAll(homeDir)}}()
 
     mkSureNotExist(qmpSockName)
     mkSureNotExist(dvmSockName)
@@ -139,21 +143,24 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
 
     consoleSock,err := net.ListenUnix("unix",  &net.UnixAddr{consoleSockName, "unix"})
     if err != nil {
-        panic(err)
+        glog.Error("cannot create socket", consoleSockName, err.Error())
+        return nil,err
     }
-    defer cleanup(func(){consoleSock.Close()})
+    defer func(){ if err != nil {consoleSock.Close()}}()
 
     qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
     if err != nil {
-        panic(err)
+        glog.Error("cannot create socket", qmpSockName, err.Error())
+        return nil,err
     }
-    defer cleanup(func(){qmpSock.Close()})
+    defer func(){ if err != nil {qmpSock.Close()}}()
 
     dvmSock,err := net.ListenUnix("unix",  &net.UnixAddr{dvmSockName, "unix"})
     if err != nil {
-        panic(err)
+        glog.Error("cannot create socket", dvmSockName, err.Error())
+        return nil,err
     }
-    defer cleanup(func(){dvmSock.Close()})
+    defer func(){ if err != nil {dvmSock.Close()}}()
 
     return &QemuContext{
         id:         id,
@@ -178,18 +185,18 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         devices:    newDeviceMap(),
         progress:   newProcessingList(),
         lock:       &sync.Mutex{},
-    }
+    },nil
 }
 
 func mkSureNotExist(filename string) error {
     if _, err := os.Stat(filename); os.IsNotExist(err) {
-        log.Println("no such file: ", filename)
+        glog.V(1).Info("no such file: ", filename)
         return nil
     } else if err == nil {
-        log.Println("try to remove exist file", filename)
+        glog.V(1).Info("try to remove exist file", filename)
         return os.Remove(filename)
     } else {
-        log.Println("can not state file ", filename)
+        glog.Error("can not state file ", filename)
         return err
     }
 }
