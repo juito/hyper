@@ -2,6 +2,7 @@ package docker
 
 import (
 	"encoding/json"
+	"dvm/lib/glog"
 )
 
 type TypeConfig struct {
@@ -58,7 +59,8 @@ type ConfigJSON struct {
 
 func (cli *DockerCli) GetContainerInfo(args ...string) (*ConfigJSON, error) {
 	containerId := args[0]
-	body, _, err := readBody(cli.Call("Get", "/container/"+containerId+"/json", nil, nil))
+	glog.V(1).Infof("ready to get the container(%s) info\n", containerId)
+	body, _, err := readBody(cli.Call("GET", "/containers/"+containerId+"/json", nil, nil))
 	if err != nil {
 		return nil, err
 	}
