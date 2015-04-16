@@ -11,6 +11,7 @@ import (
 	"unsafe"
 	"encoding/binary"
 	"sync/atomic"
+	"dvm/lib/glog"
 	"dvm/api/network/ipallocator"
 )
 
@@ -123,25 +124,24 @@ func InitNetwork(bIface, bridgeIP string) error {
 	addr, err := GetIfaceAddr(bridgeIface)
 
 	if err != nil {
-		fmt.Printf("create bridge %s %s\n", bridgeIface, bridgeIP)
+		glog.V(1).Info("create bridge %s %s\n", bridgeIface, bridgeIP)
 		// No Bridge existent, create one
 
 		// If the iface is not found, try to create it
 		if err := configureBridge(bridgeIP, bridgeIface); err != nil {
-			fmt.Printf("create bridge failed\n")
+			glog.Error("create bridge failed\n")
 			return err
 		}
 
 		addr, err = GetIfaceAddr(bridgeIface)
 		if err != nil {
-			fmt.Printf("get iface addr failed\n")
+			glog.Error("get iface addr failed\n")
 			return err
 		}
 
 		bridgeIPv4Net = addr.(*net.IPNet);
 	} else {
-		fmt.Printf("bridge exist\n")
-		// Bridge exists already, getting info...
+		glog.V(1).Info("bridge exist\n")
 		// Validate that the bridge ip matches the ip specified by BridgeIP
 		bridgeIPv4Net = addr.(*net.IPNet);
 
@@ -190,7 +190,7 @@ func configureBridge(bridgeIP, bridgeIface string) error {
 	if len(bridgeIP) != 0 {
 		_, _, err := net.ParseCIDR(bridgeIP)
 		if err != nil {
-			fmt.Printf("%s parsecidr failed\n", bridgeIP)
+			glog.Error("%s parsecidr failed\n", bridgeIP)
 			return err
 		}
 		ifaceAddr = bridgeIP
@@ -202,8 +202,8 @@ func configureBridge(bridgeIP, bridgeIface string) error {
 
 	if err := CreateBridgeIface(bridgeIface); err != nil {
 		// The bridge may already exist, therefore we can ignore an "exists" error
-		fmt.Printf("CreateBridgeIface failed %s %s\n", bridgeIface, ifaceAddr)
 		if !os.IsExist(err) {
+			glog.Error("CreateBridgeIface failed %s %s\n", bridgeIface, ifaceAddr)
 			return err
 		}
 	}
@@ -367,7 +367,7 @@ func newIfAddrmsg(family int) *IfAddrmsg {
 func (msg *IfAddrmsg) ToWireFormat() []byte {
 
 	length := syscall.SizeofIfAddrmsg
-	fmt.Printf("ifaddmsg length %d\n", length)
+	glog.V(1).Info("ifaddmsg length %d\n", length)
 	b := make([]byte, length)
 	b[0] = msg.Family
 	b[1] = msg.Prefixlen
@@ -697,21 +697,21 @@ func Allocate(requestedIP string) (*Settings, error) {
 
 	tapIface, err := net.InterfaceByName(device)
 	if err != nil {
-		fmt.Printf("get interface by name %s failed %s\n", device, err)
+		glog.Error("get interface by name %s failed %s\n", device, err)
 		tapFile.Close()
 		return nil, err
 	}
 
 	bIface, err := net.InterfaceByName(bridgeIface)
 	if err != nil {
-		fmt.Printf("get interface by name %s failed\n", bridgeIface)
+		glog.Error("get interface by name %s failed\n", bridgeIface)
 		tapFile.Close()
 		return nil, err
 	}
 
 	err = AddToBridge(tapIface, bIface)
 	if err != nil {
-		fmt.Printf("Add to bridge failed %s %s\n", bridgeIface, device)
+		glog.Error("Add to bridge failed %s %s\n", bridgeIface, device)
 		tapFile.Close()
 		return nil, err
 	}
