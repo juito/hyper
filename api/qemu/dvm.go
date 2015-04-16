@@ -27,6 +27,47 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
     )
     var cli = docker.NewDockerCli("", proto, addr, nil)
 
+	body, _, err := cli.SendCmdInfo()
+	if err != nil {
+		return "", err
+	}
+	outInfo := engine.NewOutput()
+	remoteInfo, err := outInfo.AddEnv()
+	if err != nil {
+		return "", err
+	}
+	if _, err := outInfo.Write(body); err != nil {
+		return "", fmt.Errorf("Error while reading remote info!\n")
+	}
+	outInfo.Close()
+	storageDriver = remoteInfo.Get("Driver")
+	if storageDriver == "devicemapper" {
+		if remoteInfo.Exists("DriverStatus") {
+			var driverStatus [][2]string
+			if err := remoteInfo.GetJson("DriverStatus", &driverStatus); err != nil {
+				return "", err
+			}
+			for _, pair := range driverStatus {
+				if pair[0] == "Pool Name" {
+					poolName = pair[1]
+					break
+				}
+				if pair[0] == "Backing Filesystem" {
+					if strings.Contains(pair[1], "ext") {
+						fstype = "ext4"
+					} else if strings.Contains(pair[1], "xfs") {
+						fstype = "xfs"
+					} else {
+						fstype = "dir"
+					}
+				}
+			}
+		}
+		devPrefix = poolName[:strings.Index(poolName, "-pool")]
+	} else if storageDriver == "aufs" {
+		// TODO
+	}
+
 	// Process the 'Files' section
 	files := make(map[string](pod.UserFile))
 	for _, v := range userPod.Files {
@@ -52,33 +93,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 		out.Close()
 
 		containerId := remoteInfo.Get("Id")
-		storageDriver := remoteInfo.Get("Driver")
-		if storageDriver == "devicemapper" {
-			if remoteInfo.Exists("DriverStatus") {
-				var driverStatus [][2]string
-				if err := remoteInfo.GetJson("DriverStatus", &driverStatus); err != nil {
-					return "", err
-				}
-				for _, pair := range driverStatus {
-					if pair[0] == "Pool Name" {
-						poolName = pair[1]
-						break
-					}
-					if pair[0] == "Backing Filesystem" {
-						if strings.Contains(pair[1], "ext") {
-							fstype = "ext4"
-						} else if strings.Contains(pair[1], "xfs") {
-							fstype = "xfs"
-						} else {
-							fstype = "dir"
-						}
-					}
-				}
-			}
-			devPrefix = poolName[:strings.Index(poolName, "-pool")]
-		} else if storageDriver == "aufs" {
-			// TODO
-		}
+
 
 		if containerId != "" {
 			glog.V(1).Infof("The ContainerID is %s", containerId)
