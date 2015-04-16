@@ -29,22 +29,9 @@ func MountContainerToSharedDir(containerId, sharedDir, devPrefix string) (string
 	return devFullName, nil
 }
 
-func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string) error {
-	if containerId == "" {
-		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
-	}
-	permInt, err := strconv.Atoi(perm)
-	if err != nil {
-		return err
-	}
-	// Define the basic directory, need to get them via the 'info' command
-	var (
-		metadataPath = fmt.Sprintf("%s/metadata/", rootPath)
-		mntPath = fmt.Sprintf("%s/mnt/", rootPath)
-		deviceId int
-		deviceSize int
-	)
 
+func CreateNewDevice(containerId, devPrefix, rootPath string) error {
+	var	metadataPath = fmt.Sprintf("%s/metadata/", rootPath)
 	// Get device id from the metadata file
 	idMetadataFile := path.Join(metadataPath, containerId)
 	if _, err := os.Stat(idMetadataFile); err != nil && os.IsNotExist(err) {
@@ -58,8 +45,35 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string)
 	if err := json.Unmarshal(jsonData, &dat); err != nil {
 		return err
 	}
-	deviceId = dat.Device_id
-	deviceSize = dat.Size
+	deviceId := dat.Device_id
+	deviceSize := dat.Size
+	// Activate the device for that device ID
+	devName := fmt.Sprintf("%s-%s", devPrefix, containerId)
+	poolName := fmt.Sprintf("/dev/mapper/%s-pool", devPrefix)
+	createDeviceCmd := fmt.Sprintf("dmsetup create %s --table \"0 %d thin %s %d\"", devName, deviceSize/512, poolName, deviceId)
+	createDeviceCommand := exec.Command("/bin/sh", "-c", createDeviceCmd)
+	_, err = createDeviceCommand.Output()
+	if err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string) error {
+	if containerId == "" {
+		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
+	}
+	permInt, err := strconv.Atoi(perm)
+	if err != nil {
+		return err
+	}
+	// Define the basic directory, need to get them via the 'info' command
+	var (
+
+		mntPath = fmt.Sprintf("%s/mnt/", rootPath)
+		devName = fmt.Sprintf("%s-%s", devPrefix, containerId)
+	)
 
 	// Get the mount point for the container ID
 	idMountPath := path.Join(mntPath, containerId)
@@ -68,17 +82,6 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm string)
 
 	// Whether we have the mounter directory
 	if _, err := os.Stat(idMountPath); err != nil && os.IsNotExist(err) {
-		return err
-	}
-
-	// Activate the device for that device ID
-	devName := fmt.Sprintf("%s-%s", devPrefix, containerId)
-	poolName := fmt.Sprintf("%s-pool", devPrefix)
-	createDeviceCmd := fmt.Sprintf("dmsetup create %s --table \"0 %d thin %s %d\"", devName, deviceSize/512, poolName, deviceId)
-	createDeviceCommand := exec.Command("/bin/sh", "-c", createDeviceCmd)
-	_, err = createDeviceCommand.Output()
-	if err != nil {
-		glog.Error("Error while creating a new block device!\n")
 		return err
 	}
 

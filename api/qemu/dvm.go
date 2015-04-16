@@ -11,6 +11,7 @@ import (
     "dvm/api/pod"
     "dvm/engine"
 	dm "dvm/api/storage/devicemapper"
+	"dvm/api/storage/aufs"
 	"dvm/lib/glog"
 )
 
@@ -24,6 +25,8 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 		storageDriver string
 		mountSharedDir string
 		containerId string
+		rootPath string
+		devFullName string
     )
     var cli = docker.NewDockerCli("", proto, addr, nil)
 
@@ -62,10 +65,37 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 					}
 				}
 			}
+		} else {
+			// FIXME should we re-try this while encountering this error
+			glog.Warning("Can not find the driver status for the devicemapper!")
 		}
 		devPrefix = poolName[:strings.Index(poolName, "-pool")]
+		rootPath = "/var/lib/docker/devicemapper"
 	} else if storageDriver == "aufs" {
-		// TODO
+		if remoteInfo.Exists("DriverStatus") {
+			var driverStatus [][2]string
+			if err := remoteInfo.GetJson("DriverStatus", &driverStatus); err != nil {
+				return "", err
+			}
+			for _, pair := range driverStatus {
+				if pair[0] == "Root Dir" {
+					rootPath = pair[1]
+					break
+				}
+				if pair[0] == "Backing Filesystem" {
+					if strings.Contains(pair[1], "ext") {
+						fstype = "ext4"
+					} else if strings.Contains(pair[1], "xfs") {
+						fstype = "xfs"
+					} else {
+						fstype = "dir"
+					}
+				}
+			}
+		} else {
+			// FIXME should we re-try this while encountering this error
+			glog.Warning("Can not find the driver status for the devicemapper!")
+		}
 	}
 
 	// Process the 'Files' section
@@ -94,7 +124,6 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 
 		containerId := remoteInfo.Get("Id")
 
-
 		if containerId != "" {
 			glog.V(1).Infof("The ContainerID is %s", containerId)
 			var jsonResponse *docker.ConfigJSON
@@ -103,23 +132,43 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 				return "", err
 			}
 
-			devFullName, err := dm.MountContainerToSharedDir(containerId, sharedDir, devPrefix)
-			if err != nil {
-				glog.Error("got error when mount container to share dir ", err.Error())
-				return "", err
+			if storageDriver == "devicemapper" {
+				if err := dm.CreateNewDevice(containerId, devPrefix, rootPath); err != nil {
+					return "", err
+				}
+				devFullName, err = dm.MountContainerToSharedDir(containerId, sharedDir, devPrefix)
+				if err != nil {
+					glog.Error("got error when mount container to share dir ", err.Error())
+					return "", err
+				}
+			}
+			if storageDriver == "aufs" {
+				devFullName, err = aufs.MountContainerToSharedDir(containerId, rootPath, sharedDir, "")
+				if err != nil {
+					glog.Error("got error when mount container to share dir ", err.Error())
+					return "", err
+				}
 			}
 
-			var rootPath = "/var/lib/docker/devicemapper/"
 			for _, f := range c.Files {
 				targetPath := f.Path
 				fromFile := files[f.Filename].Uri
 				if fromFile == "" {
 					continue
 				}
-				err := dm.AttachFiles(containerId, devPrefix, fromFile, targetPath, rootPath, f.Perm)
-				if err != nil {
-					glog.Error("got error when attach files ", err.Error())
-					return "", err
+				if storageDriver == "devicemapper" {
+					err := dm.AttachFiles(containerId, devPrefix, fromFile, targetPath, rootPath, f.Perm)
+					if err != nil {
+						glog.Error("got error when attach files ", err.Error())
+						return "", err
+					}
+				}
+				if storageDriver == "aufs" {
+					err := aufs.AttachFiles(containerId, fromFile, targetPath, rootPath, f.Perm)
+					if err != nil {
+						glog.Error("got error when attach files ", err.Error())
+						return "", err
+					}
 				}
 			}
 
@@ -182,7 +231,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 
 			} else {
 				// Make sure the v.Name is given
-				v.Source = path.Join("/var/tmp/", v.Name)
+				v.Source = path.Join("/var/tmp/dvm/", v.Name)
 				if _, err := os.Stat(v.Source); err != nil && os.IsNotExist(err) {
 					if err := os.MkdirAll(v.Source, os.FileMode(0777)); err != nil {
 						return "", nil
