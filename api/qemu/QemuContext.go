@@ -7,6 +7,7 @@ import (
     "sync"
     "dvm/api/pod"
     "log"
+    "dvm/api/types"
 )
 
 type QemuContext struct {
@@ -23,6 +24,7 @@ type QemuContext struct {
     hub chan QemuEvent
     qmp chan QmpInteraction
     vm  chan *DecodedMessage
+    client chan *types.QemuResponse
 
     qmpSockName string
     dvmSockName string
@@ -112,7 +114,7 @@ func newProcessingList() *processingList{
     }
 }
 
-func initContext(id string, hub chan QemuEvent, cpu, memory int) *QemuContext {
+func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) *QemuContext {
 
     qmpChannel := make(chan QmpInteraction, 128)
     vmChannel  := make(chan *DecodedMessage, 128)

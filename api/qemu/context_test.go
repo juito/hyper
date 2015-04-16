@@ -8,7 +8,7 @@ import (
 
 func TestInitContext(t *testing.T) {
 
-    ctx := initContext("vmid", nil, 3, 202)
+    ctx := initContext("vmid", nil, nil, 3, 202)
 
     if ctx.id != "vmid" {
         t.Error("id should be vmid, but is ", ctx.id)
@@ -25,13 +25,13 @@ func TestInitContext(t *testing.T) {
 }
 
 func TestRemoveSock(t *testing.T) {
-    initContext("vmid", nil, 1, 128)
-    initContext("vmid", nil, 1, 128)
+    initContext("vmid", nil, nil, 1, 128)
+    initContext("vmid", nil, nil, 1, 128)
     t.Log("repeat initiated them.")
 }
 
 func TestParseSpec(t *testing.T) {
-    ctx := initContext("vmmid", nil, 1, 128)
+    ctx := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)
@@ -69,7 +69,7 @@ func TestParseSpec(t *testing.T) {
 }
 
 func TestParseVolumes(t *testing.T) {
-    ctx := initContext("vmmid", nil, 1, 128)
+    ctx := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
@@ -117,7 +117,7 @@ func TestParseVolumes(t *testing.T) {
 }
 
 func TestVolumeReady(t *testing.T) {
-    ctx := initContext("vmmid", nil, 1, 128)
+    ctx := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("with_volumes")), &spec)
@@ -165,7 +165,7 @@ func dumpProgress(t *testing.T, pm *processingMap) {
 }
 
 func TestContainerCreated(t *testing.T) {
-    ctx := initContext("vmmid", nil, 1, 128)
+    ctx := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)
@@ -220,7 +220,7 @@ func TestContainerCreated(t *testing.T) {
 }
 
 func TestNetworkCreated(t *testing.T) {
-    ctx := initContext("vmmid", nil, 1, 128)
+    ctx := initContext("vmmid", nil, nil, 1, 128)
 
     spec := pod.UserPod{}
     err := json.Unmarshal([]byte(testJson("basic")), &spec)

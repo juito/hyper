@@ -6,6 +6,7 @@ import (
     "net"
     "dvm/api/pod"
     "dvm/api/network"
+    "dvm/api/types"
     "encoding/json"
     "io"
     "strings"
@@ -374,8 +375,8 @@ func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
 
 // main loop
 
-func QemuLoop(dvmId string, hub chan QemuEvent, cpu, memory int) {
-    context := initContext(dvmId, hub, cpu, memory)
+func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) {
+    context := initContext(dvmId, hub, client, cpu, memory)
 
     //launch routines
     go qmpHandler(context)
