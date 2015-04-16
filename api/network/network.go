@@ -38,7 +38,7 @@ var (
 )
 
 type ifReq struct {
-	Name [0x10] byte
+	Name [IFNAMSIZ] byte
 	Flags uint16
 	pad [0x28 - 0x10 - 2]byte
 }
@@ -63,11 +63,6 @@ type IfAddrmsg struct {
 type ifreqIndex struct {
 	IfrnName  [IFNAMSIZ]byte
 	IfruIndex int32
-}
-
-type ifreqFlags struct {
-	IfrnName  [IFNAMSIZ]byte
-	Ifruflags uint16
 }
 
 type NetlinkRequestData interface {
@@ -118,9 +113,7 @@ func init() {
 }
 
 func InitNetwork(bIface, bridgeIP string) error {
-	usingDefaultBridge := false
 	if bIface == "" {
-		usingDefaultBridge = true
 		bridgeIface = DefaultNetworkBridge
 	} else {
 		bridgeIface = bIface
@@ -131,10 +124,6 @@ func InitNetwork(bIface, bridgeIP string) error {
 	if err != nil {
 		fmt.Printf("create bridge %s %s\n", bridgeIface, bridgeIP)
 		// No Bridge existent, create one
-		// If we're not using the default bridge, fail without trying to create it
-		if !usingDefaultBridge {
-			return err
-		}
 
 		// If the iface is not found, try to create it
 		if err := configureBridge(bridgeIP, bridgeIface); err != nil {
@@ -194,10 +183,7 @@ func GetIfaceAddr(name string) (net.Addr, error) {
 	return addr4[0], nil
 }
 
-// configureBridge attempts to create and configure a network bridge interface named `bridgeIface` on the host
-// If the bridge `bridgeIface` already exists, it will only perform the IP address association with the existing
-// bridge (fixes issue #8444)
-// If an address which doesn't conflict with existing interfaces can't be found, an error is returned.
+// create and setup network bridge
 func configureBridge(bridgeIP, bridgeIface string) error {
 	var ifaceAddr string
 	if len(bridgeIP) != 0 {
@@ -630,7 +616,6 @@ func CreateBridgeIface(name string) error {
 	return nil
 }
 
-// Delete the actual bridge device.
 func DeleteBridge(name string) error {
 	s, err := getIfSocket()
 	if err != nil {
@@ -643,8 +628,8 @@ func DeleteBridge(name string) error {
 		return err
 	}
 
-	var ifr ifreqFlags
-	copy(ifr.IfrnName[:len(ifr.IfrnName)-1], []byte(name))
+	var ifr ifReq
+	copy(ifr.Name[:len(ifr.Name)-1], []byte(name))
 	if _, _, err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(s),
 		syscall.SIOCSIFFLAGS, uintptr(unsafe.Pointer(&ifr))); err != 0 {
 		return err
@@ -657,8 +642,6 @@ func DeleteBridge(name string) error {
 	return nil
 }
 
-// Add a slave to abridge device.  This is more backward-compatible than
-// netlink.NetworkSetMaster and works on RHEL 6.
 func AddToBridge(iface, master *net.Interface) error {
 	if len(master.Name) >= IFNAMSIZ {
 		return fmt.Errorf("Interface name %s too long", master.Name)
@@ -743,7 +726,7 @@ func Allocate(requestedIP string) (*Settings, error) {
 }
 
 // Release an interface for a select ip
-func Release(releasedIP string, file os.File) error {
+func Release(releasedIP string, file *os.File) error {
 	file.Close()
 	if err := ipAllocator.ReleaseIP(bridgeIPv4Net, net.ParseIP(releasedIP)); err != nil {
 		return err
