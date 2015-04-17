@@ -52,8 +52,8 @@ type VmNetworkInf struct {
 
 type VmRoute struct {
     Dest        string `json:"dest"`
-    Gateway     string `json:"gateway"`
-    Device      string `json:"device"`
+    Gateway     string `json:"gateway,omitempty"`
+    Device      string `json:"device,omitempty"`
 }
 
 type VmPod struct {
