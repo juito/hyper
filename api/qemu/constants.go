@@ -28,6 +28,7 @@ const(
     EVENT_INTERFACE_EJECTED
     COMMAND_RUN_POD
     COMMAND_SHUTDOWN
+    COMMAND_EXEC
     COMMAND_ACK
 )
 
@@ -64,3 +65,28 @@ const (
     PREPARING_BLOCK
     PREPARING_BIND_DIR
 )
+
+func EventString(ev int) string {
+    switch ev {
+        case EVENT_QEMU_EXIT: return "EVENT_QEMU_EXIT"
+        case EVENT_INIT_CONNECTED: return "EVENT_INIT_CONNECTED"
+        case EVENT_QMP_EVENT: return "EVENT_QMP_EVENT"
+        case EVENT_CONTAINER_ADD: return "EVENT_CONTAINER_ADD"
+        case EVENT_CONTAINER_DELETE: return "EVENT_CONTAINER_DELETE"
+        case EVENT_VOLUME_ADD: return "EVENT_VOLUME_ADD"
+        case EVENT_VOLUME_DELETE: return "EVENT_VOLUME_DELETE"
+        case EVENT_PATH_BOUND: return "EVENT_PATH_BOUND"
+        case EVENT_PATH_UNBOUND: return "EVENT_PATH_UNBOUND"
+        case EVENT_BLOCK_INSERTED: return "EVENT_BLOCK_INSERTED"
+        case EVENT_BLOCK_EJECTED: return "EVENT_BLOCK_EJECTED"
+        case EVENT_INTERFACE_ADD: return "EVENT_INTERFACE_ADD"
+        case EVENT_INTERFACE_DELETE: return "EVENT_INTERFACE_DELETE"
+        case EVENT_INTERFACE_INSERTED: return "EVENT_INTERFACE_INSERTED"
+        case EVENT_INTERFACE_EJECTED: return "EVENT_INTERFACE_EJECTED"
+        case COMMAND_RUN_POD: return "COMMAND_RUN_POD"
+        case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
+        case COMMAND_EXEC: return "COMMAND_EXEC"
+        case COMMAND_ACK: return "COMMAND_ACK"
+    }
+    return "UNKNOWN"
+}

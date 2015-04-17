@@ -132,9 +132,11 @@ func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
         }
     } else if r,ok := msg["error"] ; ok {
         m,_ := json.Marshal(msg)
-        glog.V(2).Info("got error message", string(m))
+        glog.V(2).Info("got error message ", string(m))
         return &QmpError{cause:r.(map[string]interface{})}, nil
     } else if _,ok := msg["event"] ; ok {
+        m,_ := json.Marshal(msg)
+        glog.V(2).Info("got qmp event message ", string(m))
         return parseQmpEvent(msg)
     } else {
         return nil,errors.New("Unhandled message type.")
