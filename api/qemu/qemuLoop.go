@@ -292,12 +292,22 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
         glog.Info("Qemu has exit")
         ctx.Close()
         ctx.Become(stateCleaningUp)
+        ctx.client <- &types.QemuResponse{
+            VmId: ctx.id,
+            Code: types.E_SHUTDOWM,
+            Cause: "qemu shut down",
+        }
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.event == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event")
             ctx.Close()
+//            ctx.client <- &types.QemuResponse{
+//                VmId: ctx.id,
+//                Code: types.E_SHUTDOWM,
+//                Cause: "qemu shut down",
+//            }
             ctx.Become(stateCleaningUp)
             return true
         }
