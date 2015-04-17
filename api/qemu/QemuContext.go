@@ -475,7 +475,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         Interfaces:     nil,
         Routes:         nil,
         Socket:         ctx.dvmSockName,
-        ShareDir:       ctx.shareDir,
+        ShareDir:       ShareDir,
     }
 
     ctx.userSpec = spec
