@@ -12,8 +12,8 @@ type DecodedMessage struct {
 }
 
 func newVmMessage(m *DecodedMessage) []byte {
-    length := len(m.message)
-    msg := make([]byte, 8 + length)
+    length := len(m.message) + 8
+    msg := make([]byte, length)
     binary.BigEndian.PutUint32(msg[:], uint32(m.code))
     binary.BigEndian.PutUint32(msg[4:], uint32(length))
     copy(msg[8:], m.message)
