@@ -2,11 +2,11 @@ package client
 
 import (
 	"fmt"
-//    "dvm/api/pod"
-//	"io/ioutil"
+	"encoding/json"
 	"strings"
 	"net/url"
 	"dvm/engine"
+    "dvm/api/pod"
 )
 
 
@@ -41,8 +41,8 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	out.Close()
 
 	var (
-		vmResponse []string
-		podResponse []string
+		vmResponse = make([]string, 100)
+		podResponse = make([]string, 100)
 	)
 	if remoteInfo.Exists("item") {
 		item = remoteInfo.Get("item")
@@ -52,15 +52,30 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	}
 
 	if item == "vm" || item == "pod" {
-		vmResponse = remoteInfo.GetList("vm")
+		vmResponse = remoteInfo.GetList("vmData")
 	}
 	if item == "pod" {
-		podResponse = remoteInfo.GetList("pod")
-		fmt.Printf("%v\n", podResponse)
+		podResponse = remoteInfo.GetList("podData")
 	}
 
+	var (
+		tempPod pod.UserPod
+		podVm   = make(map[string]string, len(vmResponse))
+	)
+	fmt.Printf("Item is %s\n", item)
 	for _, vm := range vmResponse {
-		fmt.Printf("Pod: %s, VM: %s\n", vm[:strings.Index(vm, "-")], vm[strings.Index(vm, "-")+1:])
+		podVm[vm[strings.Index(vm, "-")+1:]] = vm[:strings.Index(vm, "-")]
 	}
+
+	if item == "pod" {
+		fmt.Printf("POD name                   VM name\n")
+		for _, pod := range podResponse {
+			if err := json.Unmarshal([]byte(pod), &tempPod); err != nil {
+				return err
+			}
+			fmt.Printf("%s                         %s\n", tempPod.Name, podVm[tempPod.Name])
+		}
+	}
+
 	return nil
 }

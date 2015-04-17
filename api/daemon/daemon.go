@@ -98,11 +98,15 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 		return nil, err
 	}
 	dockerCli := docker.NewDockerCli("", proto, addr, nil)
+	qemuchan := make(map[string]interface{}, 100)
+	qemuclient := make(map[string]interface{}, 100)
 	daemon := &Daemon{
 		ID:               string(os.Getpid()),
 		db:               db,
 		eng:              eng,
 		dockerCli:		  dockerCli,
+		qemuChan:         qemuchan,
+		qemuClientChan:   qemuclient,
 	}
 
 	eng.OnShutdown(func() {
@@ -177,8 +181,12 @@ func (daemon *Daemon) GetQemuChan(vmid string) (interface{}, interface{}, error)
 
 func (daemon *Daemon) SetQemuChan(vmid string, qemuchan, qemuclient interface{}) error {
 	if daemon.qemuChan[vmid] == nil {
-		daemon.qemuChan[vmid] = qemuchan
-		daemon.qemuClientChan[vmid] = qemuclient
+		if qemuchan != nil {
+			daemon.qemuChan[vmid] = qemuchan
+		}
+		if qemuclient != nil {
+			daemon.qemuClientChan[vmid] = qemuclient
+		}
 		return nil
 	}
 	return fmt.Errorf("Already find a Qemu chan for vm: %s!", vmid)

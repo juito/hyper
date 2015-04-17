@@ -2,15 +2,18 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
 	"dvm/engine"
-	//"dvm/lib/glog"
+	"dvm/lib/glog"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 func (daemon *Daemon) CmdList(job *engine.Job) error {
-	item := job.Args[0]
-	if item == "" {
+	var item string
+	if len(job.Args) == 0 {
 		item = "pod"
+	} else {
+		item = job.Args[0]
 	}
 	if item != "pod" && item != "container" && item != "vm" {
 		return fmt.Errorf("Can not support %s list!", item)
@@ -18,7 +21,8 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 
 	var (
 		err error
-		vmJsonResponse []string
+		vmJsonResponse = make([]string, 100)
+		podJsonResponse = make([]string, 100)
 		i int
 	)
 	// Prepare the qemu status to client
@@ -30,7 +34,7 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 		for iter.Next() {
 			key := iter.Key()
 			value := iter.Value()
-			vmJsonResponse[i] = string(key)[7:]+"-"+string(value)[3:]
+			vmJsonResponse[i] = string(value)[3:]+"-"+string(key)[7:]
 			i = i + 1
 		}
 		iter.Release()
@@ -40,15 +44,18 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 		}
 	}
 
-	var podJsonResponse []string
-	i = 0
+	var j = 0
 	if item == "pod" {
 		iter := (daemon.db).NewIterator(util.BytesPrefix([]byte("pod-")), nil)
 		for iter.Next() {
 			key := iter.Key()
 			value := iter.Value()
-			podJsonResponse[i] = string(key)[4:]+"-"+string(value)
-			i = i + 1
+			if strings.Contains(string(key), "pod-vm-") {
+				continue
+			}
+			podJsonResponse[j] = string(value)
+			j = j + 1
+			glog.V(1).Infof("Get the pod item, pod is %s!", key)
 		}
 		iter.Release()
 		err = iter.Error()
@@ -57,8 +64,8 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 		}
 	}
 
-	v.SetList("vmData", vmJsonResponse)
-	v.SetList("podData", podJsonResponse)
+	v.SetList("vmData", vmJsonResponse[:i])
+	v.SetList("podData", podJsonResponse[:j])
 	if _, err := v.WriteTo(job.Stdout); err != nil {
 		return err
 	}

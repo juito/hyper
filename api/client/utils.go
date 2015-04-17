@@ -69,9 +69,11 @@ func (cli *DvmClient) clientRequest(method, path string, in io.Reader, headers m
 			return nil, "", statusCode, ErrConnectionRefused
 		}
 
+/*
 		if cli.tlsConfig == nil {
 			return nil, "", statusCode, fmt.Errorf("%v. Are you trying to connect to a TLS-enabled daemon without TLS?", err)
 		}
+*/
 		return nil, "", statusCode, fmt.Errorf("An error occurred trying to connect: %v", err)
 	}
 

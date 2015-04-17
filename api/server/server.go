@@ -178,11 +178,30 @@ func getList(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 
 	glog.V(1).Infof("List type is %s\n", r.Form.Get("item"))
 	job := eng.Job("list", r.Form.Get("item"))
+	stdoutBuf := bytes.NewBuffer(nil)
+
+	job.Stdout.Add(stdoutBuf)
 
 	if err := job.Run(); err != nil {
 		return err
 	}
-	return nil
+
+	str := engine.Tail(stdoutBuf, 1)
+	type listResponse struct {
+		Item string `json:"item"`
+		PodData  []string `json:"podData"`
+		VmData   []string `json:"vmData"`
+	}
+	var res listResponse
+	if err := json.Unmarshal([]byte(str), &res); err != nil {
+		return err
+	}
+	glog.V(1).Info("The pod-vm id is %s", res.VmData)
+	var env engine.Env
+	env.Set("Item", res.Item)
+	env.SetList("podData", res.PodData)
+	env.SetList("vmData", res.VmData)
+	return writeJSONEnv(w, http.StatusOK, env)
 }
 
 func getStop(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

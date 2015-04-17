@@ -13,22 +13,26 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	podArgs := job.Args[0]
 	userPod, err := pod.ProcessPodBytes([]byte(podArgs))
 	if err != nil {
+		glog.V(1).Info("Found an error while processing the POD file")
 		return err
 	}
 	vmid := fmt.Sprintf("vm-%s", pod.RandStr(10, "alpha"))
 	// store the UserPod into the db
 	if err:= daemon.WritePodToDB(userPod.Name, []byte(podArgs)); err != nil {
+		glog.V(1).Info("Found an error while saveing the POD file")
 		return err
 	}
 	if err := daemon.WritePodAndVM(userPod.Name, vmid); err != nil {
+		glog.V(1).Info("Found an error while saveing the VM info")
 		return err
 	}
 	glog.V(1).Info("Began to run the QEMU process to start the VM!\n")
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
-	qemuStatus := make(chan *types.QemuResponse)
+	qemuStatus := make(chan *types.QemuResponse, 0)
 
 	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512)
 	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {
+		glog.V(1).Info("Found an error while storing QEMU channel!\n")
 		return err
 	}
 	runPodEvent := &qemu.RunPodCommand {
@@ -39,6 +43,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	var qemuResponse *types.QemuResponse
 	for {
 		qemuResponse =<-qemuStatus
+		glog.V(1).Infof("Get the response from QEMU, pod name is %s!", qemuResponse.VmId)
 		if qemuResponse.VmId == vmid {
 			break
 		}
