@@ -34,6 +34,7 @@ type RunPodCommand struct {
 type ExecCommand struct {
     Command string `json:"cmd"`
     Arguments []string `json:"argv,omitempty"`
+    Container string `json:"container,omitempty"`
 }
 
 type ShutdownCommand struct {}
