@@ -185,6 +185,20 @@ func getList(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 	return nil
 }
 
+func getStop(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	glog.V(1).Infof("Stop the POD name is %s\n", r.Form.Get("podName"))
+	job := eng.Job("stop", r.Form.Get("name"))
+
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func postContainerCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := r.ParseForm(); err != nil {
 		return nil
@@ -333,6 +347,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/info":                           getInfo,
 			"/version":                        getVersion,
 			"/list":						   getList,
+			"/stop":                           getStop,
 		},
 		"POST": {
 			"/container/create":			   postContainerCreate,

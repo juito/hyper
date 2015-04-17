@@ -12,10 +12,11 @@ import (
 
 // We neet to process the POD json data with the given file
 func (cli *DvmClient) DvmCmdPod(args ...string) error {
-	jsonFile := args[0]
-	if jsonFile == "" {
+	if len(args) == 0 {
 		return fmt.Errorf("DVM ERROR: Can not accept the 'pod' command without file name!\n")
 	}
+	jsonFile := args[0]
+
     userPod, err := pod.ProcessPodFile(jsonFile)
 	if err != nil {
 		return err

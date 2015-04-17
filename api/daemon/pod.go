@@ -28,7 +28,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	qemuStatus := make(chan *types.QemuResponse)
 
 	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512)
-	if err := daemon.SetQemuChan(vmid, qemuPodEvent); err != nil {
+	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {
 		return err
 	}
 	runPodEvent := &qemu.RunPodCommand {
@@ -43,7 +43,8 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 			break
 		}
 	}
-	close(qemuStatus)
+
+	// XXX we should not close qemuStatus chan, it will be closed in shutdown process
 
 	// Prepare the qemu status to client
 	v := &engine.Env{}

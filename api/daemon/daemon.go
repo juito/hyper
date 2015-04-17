@@ -20,6 +20,7 @@ type Daemon struct {
 	eng              *engine.Engine
 	dockerCli		 *docker.DockerCli
 	qemuChan         map[string]interface{}
+	qemuClientChan   map[string]interface{}
 }
 
 // Install installs daemon capabilities to eng.
@@ -31,6 +32,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"pull":				 daemon.CmdPull,
 		"pod":				 daemon.CmdPod,
 		"list":              daemon.CmdList,
+		"stop":              daemon.CmdStop,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {
@@ -166,16 +168,17 @@ func (daemon *Daemon) DeletePodVmFromDB (podName string) error {
 	return nil
 }
 
-func (daemon *Daemon) GetQemuChan(vmid string) (interface{}, error) {
-	if daemon.qemuChan[vmid] != nil {
-		return daemon.qemuChan[vmid], nil
+func (daemon *Daemon) GetQemuChan(vmid string) (interface{}, interface{}, error) {
+	if daemon.qemuChan[vmid] != nil && daemon.qemuClientChan[vmid] != nil {
+		return daemon.qemuChan[vmid], daemon.qemuClientChan[vmid], nil
 	}
-	return nil, fmt.Errorf("Can not find the Qemu chan for pod: %s!", vmid)
+	return nil, nil, fmt.Errorf("Can not find the Qemu chan for pod: %s!", vmid)
 }
 
-func (daemon *Daemon) SetQemuChan(vmid string, qemuchan interface{}) error {
+func (daemon *Daemon) SetQemuChan(vmid string, qemuchan, qemuclient interface{}) error {
 	if daemon.qemuChan[vmid] == nil {
 		daemon.qemuChan[vmid] = qemuchan
+		daemon.qemuClientChan[vmid] = qemuclient
 		return nil
 	}
 	return fmt.Errorf("Already find a Qemu chan for vm: %s!", vmid)
