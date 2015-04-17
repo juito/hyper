@@ -121,7 +121,7 @@ func TestQmpNetSession(t *testing.T) {
     c := testQmpInitHelper(t, ctx.qmpSockName)
     defer c.Close()
 
-    ctx.qmp <- newNetworkAddSession(ctx, "12", "eth0", 0, 3)
+    ctx.qmp <- newNetworkAddSession(ctx, 12, "eth0", 0, 3)
 
     buf := make([]byte, 1024)
     nr,err := c.Read(buf)
@@ -158,8 +158,8 @@ func TestSessionQueue(t *testing.T) {
     c := testQmpInitHelper(t, ctx.qmpSockName)
     defer c.Close()
 
-    ctx.qmp <- newNetworkAddSession(ctx, "12", "eth0", 0, 3)
-    ctx.qmp <- newNetworkAddSession(ctx, "13", "eth1", 1, 4)
+    ctx.qmp <- newNetworkAddSession(ctx, 12, "eth0", 0, 3)
+    ctx.qmp <- newNetworkAddSession(ctx, 13, "eth1", 1, 4)
 
     buf := make([]byte, 1024)
     nr,err := c.Read(buf)

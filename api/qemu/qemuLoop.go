@@ -31,6 +31,12 @@ type RunPodCommand struct {
     Spec *pod.UserPod
 }
 
+type ExecCommand struct {
+    Command string `json:"cmd"`
+    Arguments []string `json:"argv,omitempty"`
+    Container string `json:"container,omitempty"`
+}
+
 type ShutdownCommand struct {}
 
 type CommandAck struct {
@@ -88,6 +94,7 @@ type NetDevInsertedEvent struct {
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
+func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
@@ -145,7 +152,7 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
     if isDefault {
         rt = append(rt, &RouteRule{
             Destination: "0.0.0.0/0",
-            Gateway: inf.Gateway, ViaThis: false,
+            Gateway: inf.Gateway, ViaThis: true,
         })
     }
 
@@ -285,12 +292,22 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
         glog.Info("Qemu has exit")
         ctx.Close()
         ctx.Become(stateCleaningUp)
+        ctx.client <- &types.QemuResponse{
+            VmId: ctx.id,
+            Code: types.E_SHUTDOWM,
+            Cause: "qemu shut down",
+        }
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.event == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event")
             ctx.Close()
+//            ctx.client <- &types.QemuResponse{
+//                VmId: ctx.id,
+//                Code: types.E_SHUTDOWM,
+//                Cause: "qemu shut down",
+//            }
             ctx.Become(stateCleaningUp)
             return true
         }
@@ -379,6 +396,28 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
 func stateRunning(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
+            case COMMAND_EXEC:
+            cmd := ev.(*ExecCommand)
+            pkg,err := json.Marshal(*cmd)
+            if err != nil {
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_JSON_PARSE_FAIL,
+                    Cause: fmt.Sprintf("command %s parse failed", cmd.Command,),
+                }
+                return
+            }
+            ctx.vm <- &DecodedMessage{
+                code: INIT_ACK,
+                message: pkg,
+            }
+            case COMMAND_ACK:
+            ack := ev.(*CommandAck)
+            if ack.reply == INIT_EXECCMD {
+                glog.Info("exec dvm run confirmed", string(ack.msg))
+            } else {
+                glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
+            }
             default:
                 glog.Warning("got event during pod running")
         }
@@ -392,7 +431,7 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_SHUTDOWN {
                     glog.Info("Shutting down", string(ack.msg))
-                    ctx.Become(stateRunning)
+                    ctx.Become(stateCleaningUp)
                 } else {
                     glog.Warning("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
                 }
@@ -429,7 +468,7 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
 
     for context != nil && context.handler != nil {
         ev := <-context.hub
-        glog.V(1).Infof("main event loop got message %d", ev.Event())
+        glog.V(1).Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
         context.handler(context, ev)
     }
 }
