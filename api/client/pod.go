@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"net/url"
 	"dvm/engine"
+	"dvm/api/types"
 )
 
 
@@ -47,9 +48,18 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 		fmt.Printf("Pod ID: %s\n", remoteInfo.Get("ID"))
 	}
 	// TODO we need to get the qemu response and process them
-	if remoteInfo.GetInt("Code") == 0 {
-	}
-	if remoteInfo.Get("Cause") == "" {
+	switch remoteInfo.GetInt("Code") {
+		case types.E_OK:
+			fmt.Println("VM is successful to start!")
+			break
+		case types.E_CONTEXT_INIT_FAIL:
+		case types.E_DEVICE_FAIL:
+		case types.E_QMP_INIT_FAIL:
+		case types.E_QMP_COMMAND_FAIL:
+			fmt.Println(remoteInfo.Get("Cause"))
+			break
+		default:
+			fmt.Println("Error getting unexpected qemu response!")
 	}
 	return nil
 }
