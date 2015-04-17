@@ -6,8 +6,8 @@ const (
     QmpSockName = "qmp.sock"
     ConsoleSockName = "console.sock"
     ShareDir    = "share_dir"
-    Kernel      = "vmlinuz"
-    Initrd      = "initrd.img"
+    Kernel      = "/sources/dvminit/test/kernel"
+    Initrd      = "/sources/dvminit/test/initrd-dvm.img"
 )
 
 const(
@@ -48,9 +48,10 @@ const(
     INIT_RMPOD
     INIT_NEWCONTAINER
     INIT_EXECCMD
+    INIT_SHUTDOWN
     INIT_READY
     INIT_ACK
-    INIT_SHUTDOWN
+    INIT_ERROR
 )
 
 const (
