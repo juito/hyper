@@ -53,7 +53,6 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 			for _, pair := range driverStatus {
 				if pair[0] == "Pool Name" {
 					poolName = pair[1]
-					break
 				}
 				if pair[0] == "Backing Filesystem" {
 					if strings.Contains(pair[1], "ext") {
@@ -63,6 +62,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 					} else {
 						fstype = "dir"
 					}
+					break
 				}
 			}
 		} else {
@@ -80,7 +80,6 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 			for _, pair := range driverStatus {
 				if pair[0] == "Root Dir" {
 					rootPath = pair[1]
-					break
 				}
 				if pair[0] == "Backing Filesystem" {
 					if strings.Contains(pair[1], "ext") {
@@ -90,6 +89,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 					} else {
 						fstype = "dir"
 					}
+					break
 				}
 			}
 		} else {
@@ -177,6 +177,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 				env[v[:strings.Index(v, "=")]] = v[strings.Index(v, "=")+1:]
 			}
 			glog.V(1).Infof("Parsing envs for container %d: %d Evs", i, len(env))
+			glog.V(1).Infof("The fs type is %s", fstype)
             containerCreateEvent := &ContainerCreatedEvent {
                 Index: i,
                 Id: containerId,
