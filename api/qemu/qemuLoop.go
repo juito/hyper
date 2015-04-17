@@ -137,15 +137,15 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
     var mask net.IP = tmp
 
     rt:=[]*RouteRule{
-        &RouteRule{
-            Destination: fmt.Sprintf("%s/%d", nw.IP.String(), inf.IPPrefixLen),
-            Gateway:"", ViaThis:true,
-        },
+//        &RouteRule{
+//            Destination: fmt.Sprintf("%s/%d", nw.IP.String(), inf.IPPrefixLen),
+//            Gateway:"", ViaThis:true,
+//        },
     }
     if isDefault {
         rt = append(rt, &RouteRule{
-            Destination: "0.0.0.0/24",
-            Gateway: inf.Gateway, ViaThis: true,
+            Destination: "0.0.0.0/0",
+            Gateway: inf.Gateway, ViaThis: false,
         })
     }
 
