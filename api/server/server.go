@@ -210,7 +210,7 @@ func getStop(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 	}
 
 	glog.V(1).Infof("Stop the POD name is %s\n", r.Form.Get("podName"))
-	job := eng.Job("stop", r.Form.Get("name"))
+	job := eng.Job("stop", r.Form.Get("podName"))
 
 	if err := job.Run(); err != nil {
 		return err

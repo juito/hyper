@@ -5,6 +5,7 @@ import (
 	"dvm/engine"
 	"dvm/api/qemu"
 	"dvm/api/types"
+	"dvm/lib/glog"
 )
 
 func (daemon *Daemon) CmdStop(job *engine.Job) error {
@@ -13,7 +14,13 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 	}
 	podName := job.Args[0]
 
-	qemuPodEvent, qemuStatus, err := daemon.GetQemuChan(podName)
+	glog.V(1).Infof("Prepare to stop the POD: %s", podName)
+	// We need find the vm id which running POD, and stop it
+	vmid, err := daemon.GetPodVmByName(podName)
+	if err != nil {
+		return err
+	}
+	qemuPodEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
 	if err != nil {
 		return err
 	}
