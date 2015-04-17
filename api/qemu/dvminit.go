@@ -2,6 +2,7 @@ package qemu
 import (
     "encoding/binary"
     "net"
+    "dvm/lib/glog"
 )
 
 // Message
@@ -30,18 +31,23 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
         if want > 512 {
             want = 512
         }
+        glog.V(1).Infof("trying to read %d bytes", want)
         nr,err := conn.Read(buf[:want])
         if err != nil {
+            glog.Error("read init data failed", )
             return nil, err
         }
 
         res = append(res, buf[:nr]...)
         read = read + nr
 
+        glog.V(1).Infof("read %d/%d [length = %d]", read, needRead, length)
+
         if length == 0 && read >= 8 {
             length = int(binary.BigEndian.Uint32(res[4:8]))
-            if length > 0 {
-                needRead = needRead + length
+            glog.V(1).Infof("data length is %d", length)
+            if length > 8 {
+                needRead = length
             }
         }
     }
@@ -58,21 +64,26 @@ func waitInitReady(ctx *QemuContext) {
     for {
         conn, err := ctx.dvmSock.AcceptUnix()
         if err != nil {
+            glog.Error("Cannot accept dvm socket ", err.Error())
             ctx.hub <- &InitConnectedEvent{conn:nil}
             return
         }
 
+        glog.Info("Wating for init messages...")
         connected := true
 
         for connected {
             msg,err := readVmMessage(conn)
             if err != nil {
                 connected = false
+                glog.Error("read init message failed... ", err.Error())
                 conn.Close()
             } else if msg.code == INIT_READY {
+                glog.Info("Get init ready message")
                 ctx.hub <- &InitConnectedEvent{conn:conn}
                 return
             } else {
+                glog.Warningf("Get init message %d", msg.code)
                 connected = false
                 conn.Close()
             }
