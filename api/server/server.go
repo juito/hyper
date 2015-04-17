@@ -171,12 +171,26 @@ func getInfo(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 	return nil
 }
 
+func getList(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	glog.V(1).Infof("List type is %s\n", r.Form.Get("item"))
+	job := eng.Job("list", r.Form.Get("item"))
+
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func postContainerCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := r.ParseForm(); err != nil {
 		return nil
 	}
 
-	glog.V(3).Infof("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	glog.V(1).Infof("Image name is %s\n", r.Form.Get("imageName"))
 	job := eng.Job("create", r.Form.Get("imageName"))
 	stdoutBuf := bytes.NewBuffer(nil)
 	stderrBuf := bytes.NewBuffer(nil)
@@ -206,7 +220,7 @@ func postPodCreate(eng *engine.Engine, version version.Version, w http.ResponseW
 		return nil
 	}
 
-	glog.V(3).Infof("DVM LOG: Args string is %s\n", r.Form.Get("podArgs"))
+	glog.V(1).Infof("Args string is %s\n", r.Form.Get("podArgs"))
 	job := eng.Job("pod", r.Form.Get("podArgs"))
 
 	if err := job.Run(); err != nil {
@@ -220,7 +234,7 @@ func postImageCreate(eng *engine.Engine, version version.Version, w http.Respons
 		return nil
 	}
 
-	glog.V(3).Infof("DVM LOG: Image name is %s\n", r.Form.Get("imageName"))
+	glog.V(1).Infof("Image name is %s\n", r.Form.Get("imageName"))
 	job := eng.Job("pull", r.Form.Get("imageName"))
 	stdoutBuf := bytes.NewBuffer(nil)
 
@@ -318,6 +332,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 		"GET": {
 			"/info":                           getInfo,
 			"/version":                        getVersion,
+			"/list":						   getList,
 		},
 		"POST": {
 			"/container/create":			   postContainerCreate,
