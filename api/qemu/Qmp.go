@@ -154,15 +154,6 @@ func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
             return
         }
 
-        if qmp.MessageType() == QMP_ERROR {
-            if c,ok := qmp.(*QmpError).cause["desc"]; ok {
-                if c == "Invalid JSON syntax" {
-                    glog.V(1).Info("dirty ignore syntax problem")
-                    continue
-                }
-            }
-        }
-
         ch <- qmp
         if qmp.MessageType() == QMP_EVENT && qmp.(*QmpEvent).event == QMP_EVENT_SHUTDOWN {
             return
@@ -298,11 +289,10 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
         for repeat:=0; !success && repeat < 3; repeat++ {
 
             if len(cmd.Scm) > 0 {
-                glog.V(1).Infof("send cmd with scm (%d) %s", repeat +1 , string(msg))
+                glog.V(1).Infof("send cmd with scm (%d bytes) (%d) %s", len(cmd.Scm), repeat +1 , string(msg))
                 f,_ := conn.File()
                 fd := f.Fd()
                 syscall.Sendmsg(int(fd), msg, cmd.Scm, nil, 0)
-                conn.Write(cmd.Scm)
             } else {
                 glog.V(1).Infof("sending command (%d) %s", repeat + 1, string(msg))
                 conn.Write(msg)
