@@ -28,6 +28,9 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	qemuStatus := make(chan *types.QemuResponse)
 
 	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512)
+	if err := daemon.SetQemuChan(vmid, qemuPodEvent); err != nil {
+		return err
+	}
 	runPodEvent := &qemu.RunPodCommand {
 		Spec: userPod,
 	}

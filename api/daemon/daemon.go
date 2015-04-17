@@ -19,6 +19,7 @@ type Daemon struct {
 	db				 *leveldb.DB
 	eng              *engine.Engine
 	dockerCli		 *docker.DockerCli
+	qemuChan         map[string]interface{}
 }
 
 // Install installs daemon capabilities to eng.
@@ -163,6 +164,21 @@ func (daemon *Daemon) DeletePodVmFromDB (podName string) error {
 		return err
 	}
 	return nil
+}
+
+func (daemon *Daemon) GetQemuChan(vmid string) (interface{}, error) {
+	if daemon.qemuChan[vmid] != nil {
+		return daemon.qemuChan[vmid], nil
+	}
+	return nil, fmt.Errorf("Can not find the Qemu chan for pod: %s!", vmid)
+}
+
+func (daemon *Daemon) SetQemuChan(vmid string, qemuchan interface{}) error {
+	if daemon.qemuChan[vmid] == nil {
+		daemon.qemuChan[vmid] = qemuchan
+		return nil
+	}
+	return fmt.Errorf("Already find a Qemu chan for vm: %s!", vmid)
 }
 
 func (daemon *Daemon) shutdown() error {
