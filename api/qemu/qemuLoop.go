@@ -300,7 +300,7 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
-        if event.event == QMP_EVENT_SHUTDOWN {
+        if event.Type == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event")
             ctx.Close()
 //            ctx.client <- &types.QemuResponse{

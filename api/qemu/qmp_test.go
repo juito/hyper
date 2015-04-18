@@ -66,8 +66,8 @@ func TestQmpHello(t *testing.T) {
         t.Error("should got an event")
     }
     event := ev.(*QmpEvent)
-    if event.event != "SHUTDOWN" {
-        t.Error("message is not shutdown, is ", event.event)
+    if event.Type != "SHUTDOWN" {
+        t.Error("message is not shutdown, is ", event.Event)
     }
 
     t.Log("qmp finished")
