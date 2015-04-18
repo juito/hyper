@@ -255,11 +255,29 @@ func postPodCreate(eng *engine.Engine, version version.Version, w http.ResponseW
 
 	glog.V(1).Infof("Args string is %s\n", r.Form.Get("podArgs"))
 	job := eng.Job("pod", r.Form.Get("podArgs"))
+	stdoutBuf := bytes.NewBuffer(nil)
+
+	job.Stdout.Add(stdoutBuf)
 
 	if err := job.Run(); err != nil {
 		return err
 	}
-	return nil
+
+	var (
+		env engine.Env
+		dat map[string] interface{}
+		returnedJSONstr string
+	)
+	returnedJSONstr = engine.Tail(stdoutBuf, 1)
+	if err := json.Unmarshal([]byte(returnedJSONstr), &dat); err != nil {
+		return err
+	}
+
+	env.Set("ID", dat["ID"].(string))
+	env.SetInt("Code", (int)(dat["Code"].(float64)))
+	env.Set("Cause", dat["Cause"].(string))
+
+	return writeJSONEnv(w, http.StatusOK, env)
 }
 
 func postImageCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

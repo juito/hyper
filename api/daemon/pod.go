@@ -28,7 +28,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	}
 	glog.V(1).Info("Began to run the QEMU process to start the VM!\n")
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
-	qemuStatus := make(chan *types.QemuResponse, 0)
+	qemuStatus := make(chan *types.QemuResponse, 100)
 
 	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512)
 	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {

@@ -48,19 +48,22 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 	if remoteInfo.Exists("ID") {
 		fmt.Printf("Pod ID: %s\n", remoteInfo.Get("ID"))
 	}
-	// TODO we need to get the qemu response and process them
-	switch remoteInfo.GetInt("Code") {
-		case types.E_OK:
-			fmt.Println("VM is successful to start!")
-			break
-		case types.E_CONTEXT_INIT_FAIL:
-		case types.E_DEVICE_FAIL:
-		case types.E_QMP_INIT_FAIL:
-		case types.E_QMP_COMMAND_FAIL:
-			fmt.Println(remoteInfo.Get("Cause"))
-			break
-		default:
-			fmt.Println("Error getting unexpected qemu response!")
+	errCode := remoteInfo.GetInt("Code")
+	if errCode == types.E_OK {
+		fmt.Println("VM is successful to start!")
+	} else {
+		// case types.E_CONTEXT_INIT_FAIL:
+		// case types.E_DEVICE_FAIL:
+		// case types.E_QMP_INIT_FAIL:
+		// case types.E_QMP_COMMAND_FAIL:
+		if errCode != types.E_CONTEXT_INIT_FAIL &&
+		    errCode != types.E_DEVICE_FAIL &&
+			errCode != types.E_QMP_INIT_FAIL &&
+			errCode != types.E_QMP_COMMAND_FAIL {
+			fmt.Println("DVM error: Got an unexpected error code during create POD!\n")
+		} else {
+			fmt.Printf("DVM error: %s\n", remoteInfo.Get("Cause"))
+		}
 	}
 	return nil
 }
