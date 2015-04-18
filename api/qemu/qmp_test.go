@@ -140,6 +140,13 @@ func TestQmpNetSession(t *testing.T) {
 
     c.Write([]byte(`{ "return": {}}`))
 
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 2 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
     msg := <- qemuChan
     if msg.Event() != EVENT_INTERFACE_INSERTED {
         t.Error("wrong type of message", msg.Event())
@@ -178,6 +185,14 @@ func TestSessionQueue(t *testing.T) {
 
     c.Write([]byte(`{ "return": {}}`))
 
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 2 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
     msg := <- qemuChan
     if msg.Event() != EVENT_INTERFACE_INSERTED {
         t.Error("wrong type of message", msg.Event())
@@ -200,6 +215,14 @@ func TestSessionQueue(t *testing.T) {
     nr,err = c.Read(buf)
     if err != nil {
         t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 2 in session", err.Error())
     }
     t.Log("received ", string(buf[:nr]))
 

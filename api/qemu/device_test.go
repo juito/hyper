@@ -41,7 +41,7 @@ func TestCreateIf(t *testing.T) {
         t.Logf("route: %s\t%s\t%s", event.RouteTable[i].Destination, event.RouteTable[i].Gateway,
         strconv.FormatBool(event.RouteTable[i].ViaThis))
     }
-    if len(event.RouteTable) != 2 {
+    if len(event.RouteTable) != 1 {
         t.Error("route rules:", len(event.RouteTable))
     }
 }
