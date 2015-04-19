@@ -23,6 +23,10 @@ type QemuExitEvent struct {
     message string
 }
 
+type InitFailedEvent struct {
+    reason string
+}
+
 type InitConnectedEvent struct {
     conn *net.UnixConn
 }
@@ -102,6 +106,7 @@ func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
 func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
 func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
+func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
 
 // routines:
 
@@ -231,12 +236,6 @@ func launchQemu(ctx *QemuContext) {
         glog.Warning("Cannot get stderr of qemu")
     }
 
-//    stdout, err := cmd.StdoutPipe()
-//    if err != nil {
-//        log.Println("Cannot get stderr of qemu")
-//    }
-
-    //go printDebugOutput("stdout", stdout)
     go printDebugOutput("stderr", stderr)
 
     if err := cmd.Start();err != nil {
@@ -259,7 +258,6 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     glog.V(2).Info("initial vm spec: ",string(res))
     go CreateContainer(spec, ctx.shareDir, ctx.hub)
     if networks > 0 {
-        // TODO: go create interfaces here
         for i:=0; i < networks; i++ {
             name := fmt.Sprintf("eth%d", i)
             addr := ctx.nextPciAddr()
@@ -388,6 +386,13 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 ctx.netdevInserted(info)
                 if ctx.deviceReady() {
                     runPod(ctx)
+                }
+            case ERROR_INIT_FAIL:
+                reason := ev.(*InitFailedEvent).reason
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_INIT_FAIL,
+                    Cause: reason,
                 }
         }
     }

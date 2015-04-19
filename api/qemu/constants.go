@@ -30,16 +30,19 @@ const(
     COMMAND_SHUTDOWN
     COMMAND_EXEC
     COMMAND_ACK
+    ERROR_INIT_FAIL
 )
 
 const(
-    QMP_SESSION = iota
-    QMP_RESULT
-    QMP_ERROR
+    QMP_INIT = iota
+    QMP_SESSION
     QMP_FINISH
     QMP_EVENT
     QMP_INTERNAL_ERROR
     QMP_QUIT
+    QMP_TIMEOUT
+    QMP_RESULT
+    QMP_ERROR
 )
 
 const(
@@ -87,6 +90,7 @@ func EventString(ev int) string {
         case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
         case COMMAND_EXEC: return "COMMAND_EXEC"
         case COMMAND_ACK: return "COMMAND_ACK"
+        case ERROR_INIT_FAIL: return "ERROR_INIT_FAIL"
     }
     return "UNKNOWN"
 }
