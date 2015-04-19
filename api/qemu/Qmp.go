@@ -4,52 +4,31 @@ import (
     "fmt"
     "encoding/json"
     "net"
-    "errors"
-    "log"
     "strconv"
     "dvm/lib/glog"
     "time"
     "syscall"
+    "errors"
 )
-
-type QmpWelcome struct {
-    QMP     QmpInfo
-}
-
-type QmpInfo struct {
-    Version qmpVersion  `json:"version"`
-    Package string      `json:"package"`
-    Cap     []interface{} `json:"capabilities"`
-}
-
-type qmpVersion struct {
-    Major   int `json:"major"`
-    Minor   int `json:"minor"`
-    Micro   int `json:"micro"`
-}
 
 type QmpInteraction interface {
     MessageType() int
 }
 
 type QmpQuit struct{}
-func (qmp *QmpQuit) MessageType() int { return QMP_QUIT }
 
 type QmpInternalError struct { cause string}
-func (qmp *QmpInternalError) MessageType() int { return QMP_INTERNAL_ERROR }
 
 type QmpSession struct {
     commands []*QmpCommand
     callback QemuEvent
 }
-func (qmp *QmpSession) MessageType() int { return QMP_SESSION }
 
 type QmpFinish struct {
     success bool
     reason  map[string]interface{}
     callback QemuEvent
 }
-func (qmp *QmpFinish) MessageType() int { return QMP_FINISH }
 
 type QmpCommand struct {
     Execute string `json:"execute"`
@@ -57,51 +36,71 @@ type QmpCommand struct {
     Scm []byte `json:"-"`
 }
 
-type QmpResult struct { result map[string]interface{} }
-func (qmp *QmpResult) MessageType() int { return QMP_RESULT }
+type QmpResponse struct {
+    msg QmpInteraction
+}
 
-type QmpError struct { cause map[string]interface{} }
-func (qmp *QmpError) MessageType() int { return QMP_ERROR }
+type QmpError struct {
+    Cause map[string]interface{} `json:"error"`
+}
+
+type QmpResult struct {
+    Return map[string]interface{} `json:"return"`
+}
+
+type QmpTimeStamp struct {
+    Seconds         uint64 `json:"seconds"`
+    Microseconds    uint64 `json:"microseconds"`
+}
 
 type QmpEvent struct {
-    event       string
-    timestamp   uint64
-    data        interface{}
+    Type        string          `json:"event"`
+    Timestamp   QmpTimeStamp    `json:"timestamp"`
+    Data        interface{}     `json:"data,omitempty"`
 }
 
-func (qmp *QmpEvent) MessageType() int { return QMP_EVENT }
-func (qmp *QmpEvent) Event() int { return EVENT_QMP_EVENT }
+func (qmp *QmpQuit)             MessageType() int { return QMP_QUIT }
+func (qmp *QmpInternalError)    MessageType() int { return QMP_INTERNAL_ERROR }
+func (qmp *QmpSession)          MessageType() int { return QMP_SESSION }
+func (qmp *QmpFinish)           MessageType() int { return QMP_FINISH }
 
-func parseQmpEvent(msg map[string]interface{}) (*QmpEvent,error) {
-    ts := genericGetField(msg, "timestamp")
-    if ts == nil {
-        return nil, errors.New("cannot parse timestamp")
-    }
+func (qmp *QmpResult)           MessageType() int { return QMP_RESULT }
 
-    t := (ts).(map[string]interface{})
-    seconds := genericGetField(t, "seconds")
-    microseconds := genericGetField(t, "microseconds")
-    data := genericGetField(msg, "data")
-    if data == nil {
-        data = make(map[string]interface{})
-    }
+func (qmp *QmpError)            MessageType() int { return QMP_ERROR }
 
-    if seconds != nil && microseconds != nil {
-        return &QmpEvent{
-            event: genericGetField(msg, "event").(string),
-            timestamp: uint64(seconds.(float64)) * 1000000 + uint64(microseconds.(float64)),
-            data: data,
-        },nil
-    } else {
-        return nil,errors.New("QMP Event parse failed")
-    }
-}
+func (qmp *QmpEvent)            MessageType() int { return QMP_EVENT }
+func (qmp *QmpEvent)            Event() int { return EVENT_QMP_EVENT }
+func (qmp *QmpEvent)            timestamp() uint64 { return qmp.Timestamp.Microseconds + qmp.Timestamp.Seconds * 1000000}
 
-func genericGetField(msg map[string]interface{}, field string) interface{} {
-    if v,ok := msg[field]; ok {
-        return v
+func (qmp *QmpResponse)         UnmarshalJSON(raw []byte) error {
+    var tmp map[string]interface{}
+    var err error = nil
+    json.Unmarshal(raw, &tmp)
+    glog.V(2).Info("got a message ", string(raw))
+    if _,ok := tmp["event"] ; ok {
+        msg := &QmpEvent{}
+        err = json.Unmarshal(raw, msg)
+        glog.V(2).Info("got event: ", msg.Type)
+        qmp.msg = msg
+    } else if r,ok := tmp["return"]; ok {
+        msg := &QmpResult{}
+        switch r.(type) {
+            case string:
+            msg.Return = map[string]interface{}{
+                "return": r.(string),
+            }
+            default:
+            err = json.Unmarshal(raw, msg)
+        }
+        qmp.msg = msg
+    } else if _,ok := tmp["error"]; ok {
+        msg := &QmpError{}
+        err = json.Unmarshal(raw, msg)
+        qmp.msg = msg
+    } else if _,ok := tmp["OMP"]; ok {
+        qmp.msg = nil
     }
-    return nil
+    return err
 }
 
 func qmpCmdSend(c *net.UnixConn, cmd *QmpCommand) error {
@@ -113,51 +112,17 @@ func qmpCmdSend(c *net.UnixConn, cmd *QmpCommand) error {
     return err
 }
 
-func qmpDecode(msg map[string]interface{}) (QmpInteraction, error) {
-    if r,ok := msg["return"] ; ok {
-        switch r.(type) {
-            case string:
-                glog.V(1).Info("get result string ", r.(string))
-                return &QmpResult{result:map[string]interface{}{
-                    "return": r.(string),
-                }}, nil
-            case map[string]interface{}:
-                m,_:=json.Marshal(r)
-                glog.V(1).Info("get result dict ", string(m))
-                return &QmpResult{result:r.(map[string]interface{})}, nil
-            default:
-                return &QmpResult{result:map[string]interface{}{
-                    "return": nil,
-                }}, nil
-        }
-    } else if r,ok := msg["error"] ; ok {
-        m,_ := json.Marshal(msg)
-        glog.V(2).Info("got error message ", string(m))
-        return &QmpError{cause:r.(map[string]interface{})}, nil
-    } else if _,ok := msg["event"] ; ok {
-        m,_ := json.Marshal(msg)
-        glog.V(2).Info("got qmp event message ", string(m))
-        return parseQmpEvent(msg)
-    } else {
-        return nil,errors.New("Unhandled message type.")
-    }
-}
-
 func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
     for {
-        var msg map[string]interface{}
-        if err := decoder.Decode(&msg); err != nil {
+        rsp := &QmpResponse{}
+        if err := decoder.Decode(rsp); err != nil {
             ch <- &QmpInternalError{cause:err.Error()}
             return
         }
-        qmp,err := qmpDecode(msg)
-        if err != nil {
-            ch <- &QmpInternalError{cause:err.Error()}
-            return
-        }
+        msg := rsp.msg
+        ch <- msg
 
-        ch <- qmp
-        if qmp.MessageType() == QMP_EVENT && qmp.(*QmpEvent).event == QMP_EVENT_SHUTDOWN {
+        if msg.MessageType() == QMP_EVENT && msg.(*QmpEvent).Type == QMP_EVENT_SHUTDOWN {
             return
         }
     }
@@ -168,35 +133,43 @@ func qmpInit(s *net.UnixListener) (*net.UnixConn, *json.Decoder, error) {
 
     conn, err := s.AcceptUnix()
     if err != nil {
-        log.Print("accept socket error ", err.Error())
+        glog.Error("accept socket error ", err.Error())
         return nil, nil, err
     }
     decoder := json.NewDecoder(conn)
 
+    glog.Info("begin qmp init...")
+
     err = decoder.Decode(&msg)
     if err != nil {
-        log.Print("get qmp welcome failed: ", err.Error())
+        glog.Error("get qmp welcome failed: ", err.Error())
         return nil, nil, err
     }
+
+    glog.Info("got qmp welcome, now sending command qmp_capabilities")
 
     err = qmpCmdSend(conn, &QmpCommand{Execute:"qmp_capabilities"})
     if err != nil {
-        log.Print("qmp_capabilities send failed")
+        glog.Error("qmp_capabilities send failed")
         return nil, nil, err
     }
 
-    err = decoder.Decode(&msg)
+    glog.Info("waiting for response")
+    rsp := &QmpResponse{}
+    err = decoder.Decode(rsp)
     if err != nil {
-        log.Print("response receive failed", err.Error())
+        glog.Error("response receive failed", err.Error())
         return nil, nil, err
     }
 
-    if _,ok:= msg["return"]; ok {
-        log.Print("QMP connection initialized")
+    glog.Info("got for response")
+
+    if rsp.msg.MessageType() == QMP_RESULT {
+        glog.Info("QMP connection initialized")
         return conn, decoder, nil
     }
 
-    return nil, nil, fmt.Errorf("handshake failed")
+    return nil, nil, errors.New("handshake failed")
 }
 
 func scsiId2Name(id int) string {
@@ -327,7 +300,7 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
         if ! success {
             handler <- &QmpFinish{
                 success: false,
-                reason: qe.cause,
+                reason: qe.Cause,
                 callback: session.callback,
             }
             return
@@ -343,7 +316,7 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
 func qmpHandler(ctx *QemuContext) {
     conn,decoder,err := qmpInit(ctx.qmpSock)
     if err != nil {
-        log.Print("failed to initialize QMP connection with qemu", err.Error())
+        glog.Error("failed to initialize QMP connection with qemu", err.Error())
         //TODO: should send back to hub
         return
     }
@@ -383,8 +356,8 @@ func qmpHandler(ctx *QemuContext) {
         case QMP_EVENT:
             ev := msg.(*QmpEvent)
             ctx.hub <- ev
-            if ev.event == QMP_EVENT_SHUTDOWN {
-                log.Print("got QMP shutdown event, quit...")
+            if ev.Type == QMP_EVENT_SHUTDOWN {
+                glog.Info("got QMP shutdown event, quit...")
                 return
             }
         case QMP_INTERNAL_ERROR:
