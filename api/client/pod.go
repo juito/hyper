@@ -58,7 +58,7 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 		// case types.E_QMP_COMMAND_FAIL:
 		if errCode != types.E_CONTEXT_INIT_FAIL &&
 		    errCode != types.E_DEVICE_FAIL &&
-			errCode != types.E_QMP_INIT_FAIL &&
+			errCode != types.E_INIT_FAIL &&
 			errCode != types.E_QMP_COMMAND_FAIL {
 			fmt.Println("DVM error: Got an unexpected error code during create POD!\n")
 		} else {
