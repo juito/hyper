@@ -683,7 +683,7 @@ func Allocate(requestedIP string) (*Settings, error) {
 		return nil, err
 	}
 
-	req.Flags = CIFF_TAP
+	req.Flags = CIFF_TAP | CIFF_NO_PI | CIFF_ONE_QUEUE
 	_, _, errno = syscall.Syscall(syscall.SYS_IOCTL, tapFile.Fd(),
 				      uintptr(syscall.TUNSETIFF),
 				      uintptr(unsafe.Pointer(&req)))
