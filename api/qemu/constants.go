@@ -35,6 +35,8 @@ const(
     COMMAND_RUN_POD
     COMMAND_SHUTDOWN
     COMMAND_EXEC
+    COMMAND_ATTACH
+    COMMAND_DETACH
     COMMAND_ACK
     ERROR_INIT_FAIL
 )
@@ -100,6 +102,8 @@ func EventString(ev int) string {
         case COMMAND_RUN_POD: return "COMMAND_RUN_POD"
         case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
         case COMMAND_EXEC: return "COMMAND_EXEC"
+        case COMMAND_ATTACH: return "COMMAND_ATTACH"
+        case COMMAND_DETACH: return "COMMAND_DETACH"
         case COMMAND_ACK: return "COMMAND_ACK"
         case ERROR_INIT_FAIL: return "ERROR_INIT_FAIL"
     }

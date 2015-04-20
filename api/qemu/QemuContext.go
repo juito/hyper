@@ -395,6 +395,17 @@ func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
 
+func (ctx* QemuContext) Lookup(container string) int {
+    for idx,c := range ctx.vmSpec.Containers {
+        if c.Id == container {
+            glog.V(1).Infof("found container %s at %d", container, idx)
+            return idx
+        }
+    }
+    glog.V(1).Infof("can not found container %s", container)
+    return -1
+}
+
 func (ctx *QemuContext) Close() {
     close(ctx.qmp)
     close(ctx.vm)

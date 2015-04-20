@@ -45,6 +45,16 @@ type ExecCommand struct {
 
 type ShutdownCommand struct {}
 
+type AttachCommand struct {
+    container string
+    callback  chan *TtyIO
+}
+
+type DetachCommand struct{
+    container string
+    tty       *TtyIO
+}
+
 type CommandAck struct {
     reply   uint32
     msg     []byte
@@ -112,6 +122,8 @@ func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
+func (qe* AttachCommand)            Event() int { return COMMAND_ATTACH }
+func (qe* DetachCommand)            Event() int { return COMMAND_DETACH }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
@@ -460,6 +472,26 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             } else {
                 glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
             }
+            case COMMAND_ATTACH:
+                cmd := ev.(*AttachCommand)
+                if cmd.container == "" { //console
+                    glog.V(1).Info("Allocating vm console tty.")
+                    cmd.callback <- ctx.consoleTty.Get()
+                } else if idx := ctx.Lookup( cmd.container ); idx >= 0 {
+                    glog.V(1).Info("Allocating tty for ", cmd.container)
+                    tc := ctx.devices.ttyMap[idx]
+                    cmd.callback <- tc.Get()
+                }
+            case COMMAND_DETACH:
+                cmd := ev.(DetachCommand)
+                if cmd.container == "" {
+                    glog.V(1).Info("Drop vm console tty.")
+                    ctx.consoleTty.Drop(cmd.tty)
+                } else if idx := ctx.Lookup( cmd.container ); idx >= 0 {
+                    glog.V(1).Info("Drop tty for ", cmd.container)
+                    tc := ctx.devices.ttyMap[idx]
+                    tc.Drop(cmd.tty)
+                }
             default:
                 glog.Warning("got event during pod running")
         }
