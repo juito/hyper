@@ -297,7 +297,7 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
                 "type":"socket","data": map[string]interface{}{
                     "addr":  map[string]interface{}{
                         "type":"unix","data": map[string]interface{}{"path":sockName,},
-                    },
+                    },"server":false,
                 },
             },
         },

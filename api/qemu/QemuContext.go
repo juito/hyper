@@ -36,6 +36,7 @@ type QemuContext struct {
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
     consoleSock *net.UnixListener
+    consoleTty  *ttyContext
 
     handler     stateHandler
 
@@ -99,6 +100,7 @@ func newDeviceMap() *deviceMap {
         imageMap:   make(map[string]*imageInfo),
         volumeMap:  make(map[string]*volumeInfo),
         networkMap: make(map[int]*InterfaceCreated),
+        ttyMap:     make(map[int]*ttyContext),
     }
 }
 
@@ -187,7 +189,8 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         shareDir:   shareDir,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
-        consoleSock: consoleSock,
+        consoleSock:consoleSock,
+        consoleTty: nil,
         handler:    stateInit,
         userSpec:   nil,
         vmSpec:     nil,
@@ -381,10 +384,10 @@ func (ctx* QemuContext) serialAttached(info *SerialAddEvent) {
 func (ctx* QemuContext) ttyOpened(info *TtyOpenEvent) {
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
-//    ctx.progress.finished.ttys[info.Index] = true
-//    if _,ok := ctx.progress.adding.ttys[info.Index]; ok {
-//        delete(ctx.progress.adding.ttys, info.Index)
-//    }
+    ctx.progress.finished.ttys[info.Index] = true
+    if _,ok := ctx.progress.adding.ttys[info.Index]; ok {
+        delete(ctx.progress.adding.ttys, info.Index)
+    }
     ctx.devices.ttyMap[info.Index] = info.TC
 }
 
@@ -497,7 +500,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         }
 
         ctx.progress.adding.containers[i] = true
-//        ctx.progress.adding.ttys[i] = true
+        ctx.progress.adding.ttys[i] = true
         ctx.progress.adding.serialPorts[i] = true
     }
 

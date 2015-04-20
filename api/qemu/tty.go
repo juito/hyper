@@ -146,12 +146,12 @@ func attachSerialPort(ctx *QemuContext, index int) {
         }
         return
     }
-    go waitingSerialPort(ctx, sock, index)
+    go waitingSerialPort(ctx, sockName, sock, index)
     ctx.qmp <- newSerialPortSession(ctx, sockName, index)
 }
 
-func waitingSerialPort(ctx *QemuContext, sock *net.UnixListener, index int) {
-    conn, err := ctx.consoleSock.AcceptUnix()
+func waitingSerialPort(ctx *QemuContext, sockName string, sock *net.UnixListener, index int) {
+    conn, err := sock.AcceptUnix()
     if err != nil {
         glog.Error("Accept serial port failed", err.Error())
         ctx.hub <- &InitFailedEvent{
@@ -159,7 +159,7 @@ func waitingSerialPort(ctx *QemuContext, sock *net.UnixListener, index int) {
         }
         return
     }
-    tc := setupTty(ctx.consoleSockName, conn, make(chan interface{}))
+    tc := setupTty(sockName, conn, make(chan interface{}))
     tc.start()
 
     ctx.hub <- &TtyOpenEvent{

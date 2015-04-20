@@ -212,6 +212,7 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     tc := setupTty(ctx.consoleSockName, conn, make(chan interface{}))
     tty := tc.Get()
+    ctx.consoleTty = tc
     tc.start()
 
     for {
@@ -417,10 +418,10 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
             case EVENT_TTY_OPEN:
                 info := ev.(*TtyOpenEvent)
                 ctx.ttyOpened(info)
-                glog.V(1).Info("[init] tty connected")
-//                if ctx.deviceReady() {
-//                    runPod(ctx)
-//                }
+                if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
+                    runPod(ctx)
+                }
             case ERROR_INIT_FAIL:
                 reason := ev.(*InitFailedEvent).reason
                 ctx.client <- &types.QemuResponse{
@@ -459,10 +460,6 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             } else {
                 glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
             }
-            case EVENT_TTY_OPEN:
-                info := ev.(*TtyOpenEvent)
-                ctx.ttyOpened(info)
-                glog.V(1).Info("[running] tty connected")
             default:
                 glog.Warning("got event during pod running")
         }

@@ -95,6 +95,8 @@ func EventString(ev int) string {
         case EVENT_INTERFACE_EJECTED: return "EVENT_INTERFACE_EJECTED"
         case EVENT_SERIAL_ADD: return "EVENT_SERIAL_ADD"
         case EVENT_SERIAL_DELETE: return "EVENT_SERIAL_DELETE"
+        case EVENT_TTY_OPEN: return "EVENT_TTY_OPEN"
+        case EVENT_TTY_CLOSE: return "EVENT_TTY_CLOSE"
         case COMMAND_RUN_POD: return "COMMAND_RUN_POD"
         case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
         case COMMAND_EXEC: return "COMMAND_EXEC"
