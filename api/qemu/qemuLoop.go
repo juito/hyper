@@ -192,30 +192,23 @@ func printDebugOutput(tag string, out io.ReadCloser) {
 }
 
 func waitConsoleOutput(ctx *QemuContext) {
-    buf := make([]byte, 1)
-
     conn, err := ctx.consoleSock.AcceptUnix()
     if err != nil {
         glog.Warning(err.Error())
         return
     }
 
-    line := []byte{}
-    for {
-        _,err := conn.Read(buf)
-        if err == io.EOF {
-            glog.Info("The end")
-            return
-        } else if err != nil {
-            glog.Warning("Unhandled error ", err.Error())
-            return
-        }
+    tc := setupTty(ctx.consoleSockName, conn, make(chan interface{}))
+    tty := tc.Get()
+    tc.start()
 
-        if buf[0] == '\n' && len(line) > 0 {
-            glog.V(0).Infof("[console] %s", string(line[:len(line)-1]))
-            line = []byte{}
+    for {
+        line,ok := <- tty.Output
+        if ok {
+            glog.V(1).Info("[console] ", line)
         } else {
-            line = append(line, buf[0])
+            glog.Info("console output end")
+            break
         }
     }
 }
