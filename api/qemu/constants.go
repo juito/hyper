@@ -6,6 +6,7 @@ const (
     QmpSockName = "qmp.sock"
     ConsoleSockName = "console.sock"
     ShareDir    = "share_dir"
+    SerialPrefix = "serial-port-"
     Kernel      = "/sources/dvminit/test/kernel"
     Initrd      = "/sources/dvminit/test/initrd-dvm.img"
 )
@@ -27,6 +28,10 @@ const(
     EVENT_INTERFACE_DELETE
     EVENT_INTERFACE_INSERTED
     EVENT_INTERFACE_EJECTED
+    EVENT_SERIAL_ADD
+    EVENT_SERIAL_DELETE
+    EVENT_TTY_OPEN
+    EVENT_TTY_CLOSE
     COMMAND_RUN_POD
     COMMAND_SHUTDOWN
     COMMAND_EXEC
@@ -88,6 +93,8 @@ func EventString(ev int) string {
         case EVENT_INTERFACE_DELETE: return "EVENT_INTERFACE_DELETE"
         case EVENT_INTERFACE_INSERTED: return "EVENT_INTERFACE_INSERTED"
         case EVENT_INTERFACE_EJECTED: return "EVENT_INTERFACE_EJECTED"
+        case EVENT_SERIAL_ADD: return "EVENT_SERIAL_ADD"
+        case EVENT_SERIAL_DELETE: return "EVENT_SERIAL_DELETE"
         case COMMAND_RUN_POD: return "COMMAND_RUN_POD"
         case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
         case COMMAND_EXEC: return "COMMAND_EXEC"

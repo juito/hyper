@@ -284,6 +284,40 @@ func newNetworkAddSession(ctx *QemuContext, fd uint64, device string, index, add
     }
 }
 
+func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSession {
+    index    := strconv.Itoa(idx)
+    devId    := "podttys" + index
+    ttysName := "org.getdvm.podttys." + index
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "chardev-add",
+        Arguments: map[string]interface{}{
+            "id": devId,
+            "backend" :  map[string]interface{}{
+                "type":"socket","data": map[string]interface{}{
+                    "addr":  map[string]interface{}{
+                        "type":"unix","data": map[string]interface{}{"path":sockName,},
+                    },
+                },
+            },
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute:"device_add",
+        Arguments:  map[string]interface{}{
+            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"chardev":"podttys" + index,
+            "id":"ttys" + index,"name":ttysName,
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+        callback: &SerialAddEvent{
+            Index: idx,
+            PortName: ttysName,
+        },
+    }
+}
+
 func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpSession, feedback chan QmpInteraction) {
     glog.V(1).Info("Begin process command session")
     for _,cmd := range session.commands {

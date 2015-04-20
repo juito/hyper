@@ -29,7 +29,8 @@ type QemuContext struct {
 
     qmpSockName string
     dvmSockName string
-    consoleSockName string
+    consoleSockName  string
+    serialPortPrefix string
     shareDir    string
 
     qmpSock     *net.UnixListener
@@ -52,6 +53,7 @@ type deviceMap struct {
     imageMap    map[string]*imageInfo
     volumeMap   map[string]*volumeInfo
     networkMap  map[int]*InterfaceCreated
+    ttyMap      map[int]*ttyContext
 }
 
 type blockDescriptor struct {
@@ -86,6 +88,8 @@ type processingMap struct {
     volumes     map[string]bool
     blockdevs   map[string]bool
     networks    map[int]bool
+    ttys        map[int]bool
+    serialPorts map[int]bool
 }
 
 type stateHandler func(ctx *QemuContext, event QemuEvent)
@@ -104,6 +108,8 @@ func newProcessingMap() *processingMap{
         volumes:    make(map[string]bool),  //to be create, and get volume
         blockdevs:  make(map[string]bool),  //to be insert to qemu, both volume and images
         networks:   make(map[int]bool),
+        ttys:       make(map[int]bool),
+        serialPorts:make(map[int]bool),
     }
 }
 
@@ -128,6 +134,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
     qmpSockName := homeDir + QmpSockName
     dvmSockName := homeDir + DvmSockName
     consoleSockName := homeDir + ConsoleSockName
+    serialPortPrefix := homeDir + SerialPrefix
     shareDir    := homeDir + ShareDir
 
     err = os.MkdirAll(shareDir, 0755)
@@ -176,6 +183,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
         consoleSockName: consoleSockName,
+        serialPortPrefix: serialPortPrefix,
         shareDir:   shareDir,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
@@ -203,7 +211,8 @@ func mkSureNotExist(filename string) error {
 }
 
 func (pm *processingMap) isEmpty() bool {
-    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 && len(pm.networks) == 0
+    return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 &&
+        len(pm.networks) == 0 && len(pm.ttys) == 0 && len(pm.serialPorts) == 0
 }
 
 func (ctx* QemuContext) nextScsiId() int {
@@ -359,6 +368,26 @@ func (ctx* QemuContext) netdevInserted(info *NetDevInsertedEvent) {
     }
 }
 
+func (ctx* QemuContext) serialAttached(info *SerialAddEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+    ctx.progress.finished.serialPorts[info.Index] = true
+    if _,ok := ctx.progress.adding.serialPorts[info.Index]; ok {
+        delete(ctx.progress.adding.serialPorts, info.Index)
+    }
+    ctx.vmSpec.Containers[info.Index].Tty = info.PortName
+}
+
+func (ctx* QemuContext) ttyOpened(info *TtyOpenEvent) {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
+    ctx.progress.finished.ttys[info.Index] = true
+    if _,ok := ctx.progress.adding.ttys[info.Index]; ok {
+        delete(ctx.progress.adding.ttys, info.Index)
+    }
+    ctx.devices.ttyMap[info.Index] = info.TC
+}
+
 func (ctx* QemuContext) deviceReady() bool {
     return ctx.progress.adding.isEmpty() && ctx.progress.deleting.isEmpty()
 }
@@ -468,6 +497,8 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         }
 
         ctx.progress.adding.containers[i] = true
+        ctx.progress.adding.ttys[i] = true
+        ctx.progress.adding.serialPorts[i] = true
     }
 
     ctx.vmSpec = &VmPod{

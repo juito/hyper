@@ -4,6 +4,9 @@ import (
     "io"
     "net"
     "dvm/lib/glog"
+    "strconv"
+    "os"
+    "fmt"
 )
 
 type TtyIO struct {
@@ -18,21 +21,21 @@ type ttyContext struct {
     command     chan interface{}
 }
 
-func (tc *ttyContext) Get() *TtyIO {
-    ob := make(chan string, 128)
-    tc.observers = append(tc.observers, ob)
-    return &TtyIO{
-        Output: ob,
-        Input:  tc.command,
-    }
-}
-
 func setupTty(name string, conn *net.UnixConn, input chan interface{}) *ttyContext {
     return &ttyContext{
         socketName: name,
         vmConn:     conn,
         observers:  []chan string{},
         command:    input,
+    }
+}
+
+func (tc *ttyContext) Get() *TtyIO {
+    ob := make(chan string, 128)
+    tc.observers = append(tc.observers, ob)
+    return &TtyIO{
+        Output: ob,
+        Input:  tc.command,
     }
 }
 
@@ -130,5 +133,37 @@ func ttyController(tc *ttyContext) {
             glog.Info(tc.socketName, " channel closed, quit.")
             looping = false
         }
+    }
+}
+
+func attachSerialPort(ctx *QemuContext, index int) {
+    sockName := ctx.serialPortPrefix + strconv.Itoa(index) + ".sock"
+    os.Remove(sockName)
+    sock,err := net.ListenUnix("unix",  &net.UnixAddr{sockName, "unix"})
+    if err != nil {
+        ctx.hub <- &InitFailedEvent{
+            reason: sockName + " init failed " + err.Error(),
+        }
+        return
+    }
+    go waitingSerialPort(ctx, sock, index)
+    ctx.qmp <- newSerialPortSession(ctx, sockName, index)
+}
+
+func waitingSerialPort(ctx *QemuContext, sock *net.UnixListener, index int) {
+    conn, err := ctx.consoleSock.AcceptUnix()
+    if err != nil {
+        glog.Error("Accept serial port failed", err.Error())
+        ctx.hub <- &InitFailedEvent{
+            reason: fmt.Sprintf("#%d serial port init failed: %s", index, err.Error()),
+        }
+        return
+    }
+    tc := setupTty(ctx.consoleSockName, conn, make(chan interface{}))
+    tc.start()
+
+    ctx.hub <- &TtyOpenEvent{
+        Index:  index,
+        TC:     tc,
     }
 }

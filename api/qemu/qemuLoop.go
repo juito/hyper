@@ -97,6 +97,16 @@ type NetDevInsertedEvent struct {
     Address     int
 }
 
+type SerialAddEvent struct {
+    Index       int
+    PortName    string
+}
+
+type TtyOpenEvent struct {
+    Index       int
+    TC          *ttyContext
+}
+
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
@@ -110,6 +120,8 @@ func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
 func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
 func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
+func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
+func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
 
 // routines:
 
@@ -269,6 +281,9 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
             go CreateInterface(i, addr, name, i == 0, ctx.hub)
         }
     }
+    for i:=0; i < len(ctx.userSpec.Containers); i++ {
+        go attachSerialPort(ctx, i)
+    }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
         sid := ctx.nextScsiId()
@@ -384,6 +399,18 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
             case EVENT_INTERFACE_INSERTED:
                 info := ev.(*NetDevInsertedEvent)
                 ctx.netdevInserted(info)
+                if ctx.deviceReady() {
+                    runPod(ctx)
+                }
+            case EVENT_SERIAL_ADD:
+                info := ev.(*SerialAddEvent)
+                ctx.serialAttached(info)
+                if ctx.deviceReady() {
+                    runPod(ctx)
+                }
+            case EVENT_TTY_OPEN:
+                info := ev.(*TtyOpenEvent)
+                ctx.ttyOpened(info)
                 if ctx.deviceReady() {
                     runPod(ctx)
                 }
