@@ -483,7 +483,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                     cmd.callback <- tc.Get()
                 }
             case COMMAND_DETACH:
-                cmd := ev.(DetachCommand)
+                cmd := ev.(*DetachCommand)
                 if cmd.container == "" {
                     glog.V(1).Info("Drop vm console tty.")
                     ctx.consoleTty.Drop(cmd.tty)
