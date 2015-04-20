@@ -33,6 +33,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"pod":				 daemon.CmdPod,
 		"list":              daemon.CmdList,
 		"stop":              daemon.CmdStop,
+		"exec":              daemon.CmdExec,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
 	} {
