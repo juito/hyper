@@ -93,8 +93,13 @@ func waitInitReady(ctx *QemuContext) {
 }
 
 func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
-    for {
+    looping := true
+    for looping {
         cmd := <- ctx.vm
+        if cmd.code == INIT_SHUTDOWN {
+            glog.Info("Sending shutdown command, last round of command to init")
+            looping = false
+        }
         init.Write(newVmMessage(cmd))
         res,err := readVmMessage(init)
         if err != nil {

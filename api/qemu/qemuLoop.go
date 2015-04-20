@@ -250,18 +250,17 @@ func launchQemu(ctx *QemuContext) {
     glog.V(0).Info("Waiting for command to finish...")
 
     err = cmd.Wait()
-    glog.Info("qemu exit with ", err.Error())
-    ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
+    if err != nil {
+        glog.Info("qemu exit with ", err.Error())
+        ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
+    } else {
+        glog.Info("qemu exit with 0")
+        ctx.hub <- &QemuExitEvent{message:"qemu exit with 0"}
+    }
 }
 
 func onQemuExit(ctx *QemuContext) {
-    ctx.Close()
     ctx.Become(stateCleaningUp)
-    ctx.client <- &types.QemuResponse{
-        VmId: ctx.id,
-        Code: types.E_SHUTDOWM,
-        Cause: "qemu shut down",
-    }
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
@@ -300,24 +299,26 @@ func runPod(ctx *QemuContext) {
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
-        glog.Info("Qemu has exit")
+        glog.Info("Qemu has exit, go to cleaning up")
         onQemuExit(ctx)
+        ctx.Close()
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.Type == QMP_EVENT_SHUTDOWN {
-            glog.Info("Got QMP shutdown event")
+            glog.Info("Got QMP shutdown event, go to cleaning up")
             onQemuExit(ctx)
             return true
         }
         return false
     case COMMAND_SHUTDOWN:
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
-        time.AfterFunc(30*time.Second, func(){
+        time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
                 ctx.hub <- &QemuTimeout{}
             }
         })
+        glog.Info("shutdown command sent, now get into terminating state")
         ctx.Become(stateTerminating)
         return true
     default:
@@ -400,6 +401,8 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     Code: types.E_INIT_FAIL,
                     Cause: reason,
                 }
+            default:
+                glog.Warning("got event during pod initiating")
         }
     }
 }
@@ -441,22 +444,30 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_SHUTDOWN {
-                    glog.Info("Shutting down", string(ack.msg))
-                    ctx.Become(stateCleaningUp)
+                    glog.Info("Shutting down command was accepted by init", string(ack.msg))
                 } else {
                     glog.Warning("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
                 }
             case EVENT_QEMU_TIMEOUT:
+                glog.Warning("Qemu did not exit in time, try to stop it")
                 ctx.qmp <- newQuitSession()
         }
     }
 }
 
 func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
-    if processed := commonStateHandler(ctx, ev); !processed {
-        switch ev.Event() {
-            default:
-        }
+    switch ev.Event() {
+        case EVENT_QEMU_EXIT:
+            glog.Info("Qemu has exit [cleaning up]")
+            ctx.Close()
+            ctx.Become(nil)
+            ctx.client <- &types.QemuResponse{
+                VmId: ctx.id,
+                Code: types.E_SHUTDOWM,
+                Cause: "qemu shut down",
+            }
+        default:
+            glog.Warning("got event during pod cleaning up")
     }
 }
 
@@ -480,7 +491,11 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
     go waitConsoleOutput(context)
 
     for context != nil && context.handler != nil {
-        ev := <-context.hub
+        ev,ok := <-context.hub
+        if !ok {
+            glog.Error("hub chan has already been closed")
+            break
+        }
         glog.V(1).Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
         context.handler(context, ev)
     }

@@ -407,12 +407,12 @@ func qmpHandler(ctx *QemuContext) {
                 ctx.hub <- ev
                 if ev.Type == QMP_EVENT_SHUTDOWN {
                     glog.Info("got QMP shutdown event, quit...")
-                    return
+                    handler = nil
                 }
             case QMP_INTERNAL_ERROR:
                 go qmpReceiver(ctx.qmp, json.NewDecoder(conn))
             case QMP_QUIT:
-                return
+                handler = nil
         }
     }
 
