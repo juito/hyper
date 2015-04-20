@@ -716,6 +716,13 @@ func Allocate(requestedIP string) (*Settings, error) {
 		return nil, err
 	}
 
+	err = NetworkLinkUp(tapIface)
+	if err != nil {
+		glog.Error("Link up device %s failed\n", tapIface)
+		tapFile.Close()
+		return nil, err
+	}
+
 	networkSettings := &Settings{
 		IPAddress:	ip.String(),
 		Gateway:	bridgeIPv4Net.IP.String(),
