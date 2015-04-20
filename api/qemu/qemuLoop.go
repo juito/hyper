@@ -11,6 +11,7 @@ import (
     "io"
     "strings"
     "fmt"
+    "time"
 )
 
 // Event messages for chan-ctrl
@@ -22,6 +23,8 @@ type QemuEvent interface {
 type QemuExitEvent struct {
     message string
 }
+
+type QemuTimeout struct {}
 
 type InitFailedEvent struct {
     reason string
@@ -96,6 +99,7 @@ type NetDevInsertedEvent struct {
 }
 
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
+func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
@@ -251,6 +255,16 @@ func launchQemu(ctx *QemuContext) {
     ctx.hub <- &QemuExitEvent{message:"qemu exit with " + err.Error()}
 }
 
+func onQemuExit(ctx *QemuContext) {
+    ctx.Close()
+    ctx.Become(stateCleaningUp)
+    ctx.client <- &types.QemuResponse{
+        VmId: ctx.id,
+        Code: types.E_SHUTDOWM,
+        Cause: "qemu shut down",
+    }
+}
+
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     networks := 1
     ctx.InitDeviceContext(spec, networks)
@@ -288,30 +302,23 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
         glog.Info("Qemu has exit")
-        ctx.Close()
-        ctx.Become(stateCleaningUp)
-        ctx.client <- &types.QemuResponse{
-            VmId: ctx.id,
-            Code: types.E_SHUTDOWM,
-            Cause: "qemu shut down",
-        }
+        onQemuExit(ctx)
         return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.Type == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event")
-            ctx.Close()
-//            ctx.client <- &types.QemuResponse{
-//                VmId: ctx.id,
-//                Code: types.E_SHUTDOWM,
-//                Cause: "qemu shut down",
-//            }
-            ctx.Become(stateCleaningUp)
+            onQemuExit(ctx)
             return true
         }
         return false
     case COMMAND_SHUTDOWN:
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
+        time.AfterFunc(30*time.Second, func(){
+            if ctx.handler != nil {
+                ctx.hub <- &QemuTimeout{}
+            }
+        })
         ctx.Become(stateTerminating)
         return true
     default:
@@ -440,6 +447,8 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
                 } else {
                     glog.Warning("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
                 }
+            case EVENT_QEMU_TIMEOUT:
+                ctx.qmp <- newQuitSession()
         }
     }
 }

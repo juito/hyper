@@ -212,6 +212,13 @@ func scsiId2Name(id int) string {
     return "sd" + string(ch)
 }
 
+func newQuitSession() *QmpSession {
+    commands := []*QmpCommand{
+        &QmpCommand{ Execute: "quit", Arguments: map[string]interface{}{}, },
+    }
+    return &QmpSession{ commands: commands, callback: nil, }
+}
+
 func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format string, id int) *QmpSession {
     commands := make([]*QmpCommand, 2)
     commands[0] = &QmpCommand{
@@ -376,7 +383,9 @@ func qmpHandler(ctx *QemuContext) {
                 r := msg.(*QmpFinish)
                 if r.success {
                     glog.V(1).Info("success ")
-                    ctx.hub <- r.callback
+                    if r.callback != nil {
+                        ctx.hub <- r.callback
+                    }
                 } else {
                     reason := "unknown"
                     if c,ok := r.reason["error"]; ok {

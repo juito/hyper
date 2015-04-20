@@ -12,6 +12,7 @@ const (
 
 const(
     EVENT_QEMU_EXIT = iota
+    EVENT_QEMU_TIMEOUT
     EVENT_INIT_CONNECTED
     EVENT_QMP_EVENT
     EVENT_CONTAINER_ADD
@@ -72,6 +73,7 @@ const (
 func EventString(ev int) string {
     switch ev {
         case EVENT_QEMU_EXIT: return "EVENT_QEMU_EXIT"
+        case EVENT_QEMU_TIMEOUT: return "EVENT_QEMU_TIMEOUT"
         case EVENT_INIT_CONNECTED: return "EVENT_INIT_CONNECTED"
         case EVENT_QMP_EVENT: return "EVENT_QMP_EVENT"
         case EVENT_CONTAINER_ADD: return "EVENT_CONTAINER_ADD"
