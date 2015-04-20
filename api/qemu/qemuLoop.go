@@ -39,8 +39,7 @@ type RunPodCommand struct {
 }
 
 type ExecCommand struct {
-    Command string `json:"cmd"`
-    Arguments []string `json:"argv,omitempty"`
+    Command []string `json:"cmd"`
     Container string `json:"container,omitempty"`
 }
 
@@ -420,7 +419,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 return
             }
             ctx.vm <- &DecodedMessage{
-                code: INIT_ACK,
+                code: INIT_EXECCMD,
                 message: pkg,
             }
             case COMMAND_ACK:
