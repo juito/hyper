@@ -381,10 +381,10 @@ func (ctx* QemuContext) serialAttached(info *SerialAddEvent) {
 func (ctx* QemuContext) ttyOpened(info *TtyOpenEvent) {
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
-    ctx.progress.finished.ttys[info.Index] = true
-    if _,ok := ctx.progress.adding.ttys[info.Index]; ok {
-        delete(ctx.progress.adding.ttys, info.Index)
-    }
+//    ctx.progress.finished.ttys[info.Index] = true
+//    if _,ok := ctx.progress.adding.ttys[info.Index]; ok {
+//        delete(ctx.progress.adding.ttys, info.Index)
+//    }
     ctx.devices.ttyMap[info.Index] = info.TC
 }
 
@@ -497,7 +497,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         }
 
         ctx.progress.adding.containers[i] = true
-        ctx.progress.adding.ttys[i] = true
+//        ctx.progress.adding.ttys[i] = true
         ctx.progress.adding.serialPorts[i] = true
     }
 

@@ -340,6 +340,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
             case EVENT_INIT_CONNECTED:
                 event := ev.(*InitConnectedEvent)
                 if event.conn != nil {
+                    glog.Info("begin to wait dvm commands")
                     go waitCmdToInit(ctx, event.conn)
                 } else {
                     // TODO: fail exit
@@ -367,6 +368,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     sid := ctx.nextScsiId()
                     ctx.qmp <- newDiskAddSession(ctx, info.Image, "image", info.Image, "raw", sid)
                 } else if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
                     runPod(ctx)
                 }
             case EVENT_VOLUME_ADD:
@@ -376,12 +378,14 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     sid := ctx.nextScsiId()
                     ctx.qmp <- newDiskAddSession(ctx, info.Name, "volume", info.Filepath, info.Format, sid)
                 } else if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
                     runPod(ctx)
                 }
             case EVENT_BLOCK_INSERTED:
                 info := ev.(*BlockdevInsertedEvent)
                 ctx.blockdevInserted(info)
                 if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
                     runPod(ctx)
                 }
             case EVENT_INTERFACE_ADD:
@@ -400,20 +404,23 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 info := ev.(*NetDevInsertedEvent)
                 ctx.netdevInserted(info)
                 if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
                     runPod(ctx)
                 }
             case EVENT_SERIAL_ADD:
                 info := ev.(*SerialAddEvent)
                 ctx.serialAttached(info)
                 if ctx.deviceReady() {
+                    glog.V(1).Info("device ready, could run pod.")
                     runPod(ctx)
                 }
             case EVENT_TTY_OPEN:
                 info := ev.(*TtyOpenEvent)
                 ctx.ttyOpened(info)
-                if ctx.deviceReady() {
-                    runPod(ctx)
-                }
+                glog.V(1).Info("[init] tty connected")
+//                if ctx.deviceReady() {
+//                    runPod(ctx)
+//                }
             case ERROR_INIT_FAIL:
                 reason := ev.(*InitFailedEvent).reason
                 ctx.client <- &types.QemuResponse{
@@ -452,6 +459,10 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             } else {
                 glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
             }
+            case EVENT_TTY_OPEN:
+                info := ev.(*TtyOpenEvent)
+                ctx.ttyOpened(info)
+                glog.V(1).Info("[running] tty connected")
             default:
                 glog.Warning("got event during pod running")
         }
