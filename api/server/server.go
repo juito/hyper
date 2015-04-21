@@ -223,30 +223,36 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 		return nil
 	}
 
-	job := eng.Job("exec", r.Form.Get("podname"), r.Form.Get("command"))
-	stdoutBuf := bytes.NewBuffer(nil)
-
-	job.Stdout.Add(stdoutBuf)
-
-	if err := job.Run(); err != nil {
-		return err
-	}
-
 	var (
-		env engine.Env
-		dat map[string] interface{}
-		returnedJSONstr string
+		job = eng.Job("exec", r.Form.Get("podname"), r.Form.Get("command"))
+		errOut io.Writer = os.Stderr
+		errStream io.Writer
 	)
-	returnedJSONstr = engine.Tail(stdoutBuf, 1)
-	if err := json.Unmarshal([]byte(returnedJSONstr), &dat); err != nil {
+
+	// Setting up the streaming http interface.
+	inStream, outStream, err := hijackServer(w)
+	if err != nil {
 		return err
 	}
+	defer closeStreams(inStream, outStream)
 
-	env.Set("ID", dat["ID"].(string))
-	env.SetInt("Code", (int)(dat["Code"].(float64)))
-	env.Set("Cause", dat["Cause"].(string))
+	fmt.Fprintf(outStream, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
 
-	return writeJSONEnv(w, http.StatusOK, env)
+	errStream = outStream
+	job.Stdin.Add(inStream)
+	job.Stdout.Add(outStream)
+	job.Stderr.Set(errStream)
+	errOut = outStream
+
+	// Now run the user process in container.
+	job.SetCloseIO(false)
+	if err := job.Run(); err != nil {
+		fmt.Fprintf(errOut, "Error starting exec command in POD %s: %s\n", r.Form.Get("podname"), err.Error())
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
 }
 
 func postContainerCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {

@@ -2,9 +2,10 @@ package client
 
 import (
 	"fmt"
+	"io"
 	"net/url"
 	"strings"
-	"dvm/engine"
+	"dvm/lib/promise"
 )
 
 func (cli *DvmClient) DvmCmdExec(args ...string) error {
@@ -22,29 +23,37 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	v := url.Values{}
 	v.Set("podname", podName)
 	v.Set("command", command)
-	body, _, err := readBody(cli.call("POST", "/exec?"+v.Encode(), nil, nil));
-	if err != nil {
-		return err
-	}
-	out := engine.NewOutput()
-	remoteInfo, err := out.AddEnv()
-	if err != nil {
-		return err
-	}
 
-	if _, err := out.Write(body); err != nil {
-		fmt.Printf("Error reading remote info: %s", err)
-		return err
-	}
-	out.Close()
-	// We need a result while executing a command
-	// This 'ID' stands for pod name
-	// This 'Code'
-	// THis 'Cause' ..
-	if remoteInfo.Exists("ID") {
-		// TODO ...
-	}
+	var (
+		hijacked    = make(chan io.Closer)
+		errCh       chan error
+	)
+	// Block the return until the chan gets closed
+	defer func() {
+		fmt.Printf("End of CmdExec(), Waiting for hijack to finish.")
+		if _, ok := <-hijacked; ok {
+			fmt.Printf("Hijack did not finish (chan still open)")
+		}
+	}()
 
+	errCh = promise.Go(func() error {
+		return cli.hijack("POST", "/exec?"+v.Encode(), true, cli.in, cli.out, cli.out, hijacked, nil)
+	})
+
+	// Acknowledge the hijack before starting
+	select {
+	case closer := <-hijacked:
+		// Make sure that hijack gets closed when returning. (result
+		// in closing hijack chan and freeing server's goroutines.
+		if closer != nil {
+			defer closer.Close()
+		}
+	case err := <-errCh:
+		if err != nil {
+			fmt.Printf("Error hijack: %s", err.Error())
+			return err
+		}
+	}
 	fmt.Printf("Success to exec the command %s for POD %s!\n", command, podName)
 	return nil
 }

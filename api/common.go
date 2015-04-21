@@ -7,7 +7,7 @@ import (
 )
 
 const (
-	APIVERSION = "0.0.1"
+	APIVERSION = "1.17"
 )
 
 func FormGroup(key string, start, last int) string {
