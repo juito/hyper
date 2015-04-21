@@ -107,8 +107,6 @@ func (qmp *QmpResponse) UnmarshalJSON(raw []byte) error {
         msg := &QmpError{}
         err = json.Unmarshal(raw, msg)
         qmp.msg = msg
-    } else if _,ok := tmp["OMP"]; ok {
-        qmp.msg = nil
     }
     return err
 }
@@ -129,7 +127,7 @@ func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
             glog.Info("QMP exit as got EOF")
             return
         } else if err != nil {
-            glog.Error("QMP Decode error: ", err.Error())
+            glog.Error("QMP receive and decode error: ", err.Error())
             ch <- &QmpInternalError{cause:err.Error()}
             return
         }
@@ -432,9 +430,7 @@ func qmpHandler(ctx *QemuContext) {
                 if len(buf) > 0 {
                     go qmpCommander(ctx.qmp, conn, buf[0], res)
                 }
-            case QMP_RESULT:
-                res <- msg
-            case QMP_ERROR:
+            case QMP_RESULT , QMP_ERROR:
                 res <- msg
             case QMP_EVENT:
                 ev := msg.(*QmpEvent)
@@ -444,6 +440,7 @@ func qmpHandler(ctx *QemuContext) {
                     handler = nil
                 }
             case QMP_INTERNAL_ERROR:
+//                ctx.hub <-
                 go qmpReceiver(ctx.qmp, json.NewDecoder(conn))
             case QMP_QUIT:
                 handler = nil

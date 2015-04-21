@@ -6,6 +6,33 @@ import (
     "encoding/json"
 )
 
+func TestMessageParse(t *testing.T) {
+    rsp := &QmpResponse{}
+    msg := []byte(`{"return": {}}`)
+    err := json.Unmarshal(msg, rsp)
+    if err != nil || rsp.msg.MessageType() != QMP_RESULT {
+        t.Error("normal return parsing failed")
+    }
+
+    msg_str := []byte(`{"return": "OK\r\n"}`)
+    err = json.Unmarshal(msg_str, rsp)
+    if err != nil || rsp.msg.MessageType() != QMP_RESULT {
+        t.Error("normal return parsing failed")
+    }
+
+    msg_event := []byte(`{"timestamp": {"seconds": 1429545058, "microseconds": 283331}, "event": "NIC_RX_FILTER_CHANGED", "data": {"path": "/machine/peripheral-anon/device[1]/virtio-backend"}}`)
+    err = json.Unmarshal(msg_event, rsp)
+    if err != nil || rsp.msg.MessageType() != QMP_EVENT {
+        t.Error("normal return parsing failed")
+    }
+
+    msg_error := []byte(`{"error": {"class": "GenericError", "desc": "QMP input object member 'server' is unexpected"}}`)
+    err = json.Unmarshal(msg_error, rsp)
+    if err != nil || rsp.msg.MessageType() != QMP_ERROR {
+        t.Error("normal return parsing failed")
+    }
+}
+
 func testQmpInitHelper(t *testing.T, s string) net.Conn {
     t.Log("connecting to ", s)
 
