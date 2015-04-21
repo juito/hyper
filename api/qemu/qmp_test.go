@@ -154,6 +154,47 @@ func TestInitFail(t *testing.T) {
     t.Log("qmp init failed")
 }
 
+func TestQmpConnTimeout(t *testing.T) {
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    time.Sleep(6*time.Second)
+
+    ev := <- qemuChan
+    if ev.Event() != ERROR_INIT_FAIL {
+        t.Error("should got an fail event")
+    }
+
+    t.Log("finished timeout test")
+}
+
+func TestQmpInitTimeout(t *testing.T) {
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    t.Log("connecting to ", ctx.qmpSockName)
+
+    _,err := net.Dial("unix", ctx.qmpSockName)
+    if err != nil {
+        t.Error("cannot connect to qmp socket", err.Error())
+    }
+
+    t.Log("connected")
+
+    time.Sleep(11*time.Second)
+
+    ev := <- qemuChan
+    if ev.Event() != ERROR_INIT_FAIL {
+        t.Error("should got an fail event")
+    }
+
+    t.Log("finished timeout test")
+}
+
 func TestQmpDiskSession(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)

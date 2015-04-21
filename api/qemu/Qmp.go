@@ -159,6 +159,7 @@ func qmpInitializer(ctx *QemuContext) {
     var err error
 
     s := ctx.qmpSock
+    s.SetDeadline(time.Now().Add(5 * time.Second))
     conn, err := s.AcceptUnix()
     if err != nil {
         glog.Error("accept socket error ", err.Error())
