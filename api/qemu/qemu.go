@@ -109,5 +109,6 @@ func launchQemu(ctx *QemuContext) {
         glog.Info("qemu exit with 0")
         ctx.hub <- &QemuExitEvent{message:"qemu exit with 0"}
     }
+    ctx.process = nil
     ctx.wdt <- "quit"
 }

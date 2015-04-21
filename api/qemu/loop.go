@@ -10,7 +10,12 @@ import (
 )
 
 func onQemuExit(ctx *QemuContext) {
-    ctx.Become(stateCleaningUp)
+    ctx.client <- &types.QemuResponse{
+        VmId: ctx.id,
+        Code: types.E_SHUTDOWM,
+        Cause: "qemu shut down",
+    }
+    ctx.Close()
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
@@ -39,7 +44,9 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
 func runPod(ctx *QemuContext) {
     pod,err := json.Marshal(*ctx.vmSpec)
     if err != nil {
-        //TODO: fail exit
+        ctx.hub <- &InitFailedEvent{
+            reason: "Generated wrong run profile " + err.Error(),
+        }
         return
     }
     ctx.vm <- &DecodedMessage{
@@ -50,20 +57,28 @@ func runPod(ctx *QemuContext) {
 
 // state machine
 func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
+    processed := true
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
         glog.Info("Qemu has exit, go to cleaning up")
+        ctx.Become(stateCleaningUp)
         onQemuExit(ctx)
-        ctx.Close()
-        return true
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.Type == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event, go to cleaning up")
-            onQemuExit(ctx)
-            return true
+            ctx.Become(stateCleaningUp)
+        } else {
+            processed = false
         }
-        return false
+    case ERROR_INTERRUPTED:
+        glog.Info("Connection interrupted, quit...")
+        ctx.Become(stateTerminating)
+        time.AfterFunc(3*time.Second, func(){
+            if ctx.handler != nil {
+                ctx.hub <- &QemuTimeout{}
+            }
+        })
     case COMMAND_SHUTDOWN:
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
         time.AfterFunc(3*time.Second, func(){
@@ -73,23 +88,94 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
         })
         glog.Info("shutdown command sent, now get into terminating state")
         ctx.Become(stateTerminating)
-        return true
     default:
-        return false
+        processed = false
     }
+    return processed
+}
+
+func deviceInitHandler(ctx *QemuContext, ev QemuEvent) bool {
+    processed := true
+    switch ev.Event() {
+        case EVENT_CONTAINER_ADD:
+            info := ev.(*ContainerCreatedEvent)
+            needInsert := ctx.containerCreated(info)
+            if needInsert {
+                sid := ctx.nextScsiId()
+                ctx.qmp <- newDiskAddSession(ctx, info.Image, "image", info.Image, "raw", sid)
+            }
+        case EVENT_VOLUME_ADD:
+            info := ev.(*VolumeReadyEvent)
+            needInsert := ctx.volumeReady(info)
+            if needInsert {
+                sid := ctx.nextScsiId()
+                ctx.qmp <- newDiskAddSession(ctx, info.Name, "volume", info.Filepath, info.Format, sid)
+            }
+        case EVENT_BLOCK_INSERTED:
+            info := ev.(*BlockdevInsertedEvent)
+            ctx.blockdevInserted(info)
+        case EVENT_INTERFACE_ADD:
+            info := ev.(*InterfaceCreated)
+            ctx.interfaceCreated(info)
+            ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
+        case EVENT_INTERFACE_INSERTED:
+            info := ev.(*NetDevInsertedEvent)
+            ctx.netdevInserted(info)
+        case EVENT_SERIAL_ADD:
+            info := ev.(*SerialAddEvent)
+            ctx.serialAttached(info)
+        case EVENT_TTY_OPEN:
+            info := ev.(*TtyOpenEvent)
+            ctx.ttyOpened(info)
+        default:
+            processed = false
+    }
+    return processed
+}
+
+func initFailureHandler(ctx *QemuContext, ev QemuEvent) bool {
+    processed := true
+    switch ev.Event() {
+        case ERROR_INIT_FAIL:
+            reason := ev.(*InitFailedEvent).reason
+            ctx.client <- &types.QemuResponse{
+                VmId: ctx.id,
+                Code: types.E_INIT_FAIL,
+                Cause: reason,
+            }
+        case ERROR_QMP_FAIL:
+            reason := "QMP protocol exception"
+            if ev.(*DeviceFailed).session != nil {
+                reason = "QMP protocol exception: failed while waiting " + EventString(ev.(*DeviceFailed).session.Event())
+            }
+            glog.Error(reason)
+            ctx.client <- &types.QemuResponse{
+                VmId: ctx.id,
+                Code: types.E_DEVICE_FAIL,
+                Cause: reason,
+            }
+        default:
+            processed = false
+    }
+    return processed
 }
 
 func stateInit(ctx *QemuContext, ev QemuEvent) {
-    if processed := commonStateHandler(ctx, ev); !processed {
+    if processed := commonStateHandler(ctx, ev); processed {
+        //processed by common
+    } else if processed := deviceInitHandler(ctx, ev); processed {
+        if ctx.deviceReady() {
+            glog.V(1).Info("device ready, could run pod.")
+            runPod(ctx)
+        }
+    } else if processed := initFailureHandler(ctx, ev); processed {
+        ctx.hub <- &ShutdownCommand{}
+    } else {
         switch ev.Event() {
             case EVENT_INIT_CONNECTED:
                 event := ev.(*InitConnectedEvent)
-                if event.conn != nil {
-                    glog.Info("begin to wait dvm commands")
-                    go waitCmdToInit(ctx, event.conn)
-                } else {
-                    // TODO: fail exit
-                }
+                glog.Info("begin to wait dvm commands")
+                go waitCmdToInit(ctx, event.conn)
             case COMMAND_RUN_POD:
                 glog.Info("got spec, prepare devices")
                 prepareDevice(ctx, ev.(*RunPodCommand).Spec)
@@ -106,84 +192,6 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 } else {
                     glog.Warning("wrong reply to ", string(ack.reply), string(ack.msg))
                 }
-            case EVENT_CONTAINER_ADD:
-                info := ev.(*ContainerCreatedEvent)
-                needInsert := ctx.containerCreated(info)
-                if needInsert {
-                    sid := ctx.nextScsiId()
-                    ctx.qmp <- newDiskAddSession(ctx, info.Image, "image", info.Image, "raw", sid)
-                } else if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case EVENT_VOLUME_ADD:
-                info := ev.(*VolumeReadyEvent)
-                needInsert := ctx.volumeReady(info)
-                if needInsert {
-                    sid := ctx.nextScsiId()
-                    ctx.qmp <- newDiskAddSession(ctx, info.Name, "volume", info.Filepath, info.Format, sid)
-                } else if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case EVENT_BLOCK_INSERTED:
-                info := ev.(*BlockdevInsertedEvent)
-                ctx.blockdevInserted(info)
-                if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case EVENT_INTERFACE_ADD:
-                info := ev.(*InterfaceCreated)
-                if info.IpAddr != "" {
-                    ctx.interfaceCreated(info)
-                    ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
-                } else {
-                    ctx.client <- &types.QemuResponse{
-                        VmId: ctx.id,
-                        Code: types.E_DEVICE_FAIL,
-                        Cause: fmt.Sprintf("network interface %d creation fail", info.Index),
-                    }
-                }
-            case EVENT_INTERFACE_INSERTED:
-                info := ev.(*NetDevInsertedEvent)
-                ctx.netdevInserted(info)
-                if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case EVENT_SERIAL_ADD:
-                info := ev.(*SerialAddEvent)
-                ctx.serialAttached(info)
-                if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case EVENT_TTY_OPEN:
-                info := ev.(*TtyOpenEvent)
-                ctx.ttyOpened(info)
-                if ctx.deviceReady() {
-                    glog.V(1).Info("device ready, could run pod.")
-                    runPod(ctx)
-                }
-            case ERROR_INIT_FAIL:
-                reason := ev.(*InitFailedEvent).reason
-                ctx.client <- &types.QemuResponse{
-                    VmId: ctx.id,
-                    Code: types.E_INIT_FAIL,
-                    Cause: reason,
-                }
-            case ERROR_QMP_FAIL:
-            reason := "QMP protocol exception"
-            if ev.(*DeviceFailed).session != nil {
-                reason = "QMP protocol exception: failed while waiting " + EventString(ev.(*DeviceFailed).session.Event())
-            }
-            glog.Error(reason)
-            ctx.client <- &types.QemuResponse{
-                VmId: ctx.id,
-                Code: types.E_INIT_FAIL,
-                Cause: reason,
-            }
             default:
                 glog.Warning("got event during pod initiating")
         }
@@ -267,13 +275,8 @@ func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
     switch ev.Event() {
         case EVENT_QEMU_EXIT:
             glog.Info("Qemu has exit [cleaning up]")
-            ctx.Close()
+            onQemuExit(ctx)
             ctx.Become(nil)
-            ctx.client <- &types.QemuResponse{
-                VmId: ctx.id,
-                Code: types.E_SHUTDOWM,
-                Cause: "qemu shut down",
-            }
         default:
             glog.Warning("got event during pod cleaning up")
     }

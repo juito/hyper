@@ -11,14 +11,8 @@ func CreateInterface(index int, pciAddr int, name string, isDefault bool, callba
     inf, err := network.Allocate("")
     if err != nil {
         glog.Error("interface creating failed", err.Error())
-        callback <- &InterfaceCreated{
-            Index:      index,
-            PCIAddr:    pciAddr,
-            DeviceName: name,
-            Fd:         0,
-            IpAddr:     "",
-            NetMask:    "",
-            RouteTable: nil,
+        callback <- &InitFailedEvent{
+            reason: "can not allocate ip address " + err.Error(),
         }
         return
     }
@@ -31,14 +25,8 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
     ip,nw,err := net.ParseCIDR(fmt.Sprintf("%s/%d", inf.IPAddress, inf.IPPrefixLen))
     if err != nil {
         glog.Error("can not parse cidr")
-        callback <- &InterfaceCreated{
-            Index:      index,
-            PCIAddr:    pciAddr,
-            DeviceName: name,
-            Fd:         0,
-            IpAddr:     "",
-            NetMask:    "",
-            RouteTable: nil,
+        callback <- &InitFailedEvent{
+            reason: "can not get network info " + err.Error(),
         }
         return
     }

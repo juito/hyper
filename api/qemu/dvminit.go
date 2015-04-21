@@ -4,6 +4,7 @@ import (
     "net"
     "dvm/lib/glog"
     "time"
+    "fmt"
 )
 
 // Message
@@ -62,35 +63,34 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
 }
 
 func waitInitReady(ctx *QemuContext) {
-    for {
-        ctx.dvmSock.SetDeadline(time.Now().Add(30 * time.Second))
-        conn, err := ctx.dvmSock.AcceptUnix()
-        if err != nil {
-            glog.Error("Cannot accept dvm socket ", err.Error())
-            ctx.hub <- &InitConnectedEvent{conn:nil}
-            return
+    ctx.dvmSock.SetDeadline(time.Now().Add(30 * time.Second))
+    conn, err := ctx.dvmSock.AcceptUnix()
+    if err != nil {
+        glog.Error("Cannot accept dvm socket ", err.Error())
+        ctx.hub <- &InitFailedEvent{
+            reason: "Cannot accept dvm socket " + err.Error(),
         }
+        return
+    }
 
-        glog.Info("Wating for init messages...")
-        connected := true
+    glog.Info("Wating for init messages...")
 
-        for connected {
-            msg,err := readVmMessage(conn)
-            if err != nil {
-                connected = false
-                glog.Error("read init message failed... ", err.Error())
-                conn.Close()
-            } else if msg.code == INIT_READY {
-                glog.Info("Get init ready message")
-                ctx.hub <- &InitConnectedEvent{conn:conn}
-                return
-            } else {
-                glog.Warningf("Get init message %d", msg.code)
-                connected = false
-                conn.Close()
-            }
+    msg,err := readVmMessage(conn)
+    if err != nil {
+        glog.Error("read init message failed... ", err.Error())
+        ctx.hub <- &InitFailedEvent{
+            reason: "read init message failed... " + err.Error(),
         }
-
+        conn.Close()
+    } else if msg.code == INIT_READY {
+        glog.Info("Get init ready message")
+        ctx.hub <- &InitConnectedEvent{conn:conn}
+    } else {
+        glog.Warningf("Get init message %d", msg.code)
+        ctx.hub <- &InitFailedEvent{
+            reason: fmt.Sprintf("Get init message %d", msg.code),
+        }
+        conn.Close()
     }
 }
 
@@ -109,7 +109,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
         init.Write(newVmMessage(cmd))
         res,err := readVmMessage(init)
         if err != nil {
-            //TODO: deal with error
+            ctx.hub <- &Interrupted{ reason: "dvminit socket failed " + err.Error(), }
             return
         } else if res.code == INIT_ACK {
             ctx.hub <- &CommandAck{

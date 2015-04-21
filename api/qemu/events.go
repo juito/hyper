@@ -110,6 +110,10 @@ type DeviceFailed struct {
     session     QemuEvent
 }
 
+type Interrupted struct {
+    reason      string
+}
+
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
@@ -128,3 +132,4 @@ func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
 func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
 func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
 func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }
+func (qe* Interrupted)              Event() int { return ERROR_INTERRUPTED }

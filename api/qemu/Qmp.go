@@ -442,7 +442,7 @@ func qmpHandler(ctx *QemuContext) {
                 res <- msg
                 handler = nil
                 glog.Info("QMP handler quit as received ",  msg.(*QmpInternalError).cause)
-//                ctx.hub <- QemuExitEvent{ msg: msg.(*QmpInternalError).cause, }
+                ctx.hub <- &Interrupted{ reason: msg.(*QmpInternalError).cause, }
             case QMP_QUIT:
                 handler = nil
         }
