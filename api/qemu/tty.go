@@ -7,6 +7,7 @@ import (
     "strconv"
     "os"
     "fmt"
+    "time"
 )
 
 type TtyIO struct {
@@ -151,6 +152,7 @@ func attachSerialPort(ctx *QemuContext, index int) {
 }
 
 func waitingSerialPort(ctx *QemuContext, sockName string, sock *net.UnixListener, index int) {
+    sock.SetDeadline(time.Now().Add(30 * time.Second))
     conn, err := sock.AcceptUnix()
     if err != nil {
         glog.Error("Accept serial port failed", err.Error())

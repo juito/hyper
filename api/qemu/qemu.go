@@ -5,6 +5,7 @@ import (
     "dvm/lib/glog"
     "os/exec"
     "strings"
+    "time"
 )
 
 func printDebugOutput(tag string, out io.ReadCloser) {
@@ -22,6 +23,7 @@ func printDebugOutput(tag string, out io.ReadCloser) {
 }
 
 func waitConsoleOutput(ctx *QemuContext) {
+    ctx.consoleSock.SetDeadline(time.Now().Add(30 * time.Second))
     conn, err := ctx.consoleSock.AcceptUnix()
     if err != nil {
         glog.Warning(err.Error())

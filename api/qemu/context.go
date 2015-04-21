@@ -414,6 +414,7 @@ func (ctx* QemuContext) Lookup(container string) int {
 func (ctx *QemuContext) Close() {
     close(ctx.qmp)
     close(ctx.vm)
+    close(ctx.wdt)
     ctx.qmpSock.Close()
     ctx.dvmSock.Close()
     os.Remove(ctx.dvmSockName)

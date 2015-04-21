@@ -159,6 +159,7 @@ func qmpInitializer(ctx *QemuContext) {
     var err error
 
     s := ctx.qmpSock
+    s.SetDeadline(time.Now().Add(5 * time.Second))
     conn, err := s.AcceptUnix()
     if err != nil {
         glog.Error("accept socket error ", err.Error())
@@ -352,7 +353,11 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
                 conn.Write(msg)
             }
 
-            res := <-feedback
+            res,ok := <-feedback
+            if !ok {
+                glog.Info("QMP command result chan closed")
+                return
+            }
             switch res.MessageType() {
                 case QMP_RESULT:
                 success = true
@@ -362,8 +367,8 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
                 glog.Warning("got one qmp error")
                 qe = res.(*QmpError)
                 time.Sleep(1000*time.Millisecond)
-                default:
-                handler <- qmpFail("unknown received message type", session.callback)
+                case QMP_INTERNAL_ERROR:
+                glog.Info("QMP quit... commander quit... ")
                 return
             }
         }
@@ -434,6 +439,7 @@ func qmpHandler(ctx *QemuContext) {
                     handler = nil
                 }
             case QMP_INTERNAL_ERROR:
+                res <- msg
                 handler = nil
                 glog.Info("QMP handler quit as received ",  msg.(*QmpInternalError).cause)
 //                ctx.hub <- QemuExitEvent{ msg: msg.(*QmpInternalError).cause, }

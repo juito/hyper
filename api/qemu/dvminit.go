@@ -3,6 +3,7 @@ import (
     "encoding/binary"
     "net"
     "dvm/lib/glog"
+    "time"
 )
 
 // Message
@@ -62,6 +63,7 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
 
 func waitInitReady(ctx *QemuContext) {
     for {
+        ctx.dvmSock.SetDeadline(time.Now().Add(30 * time.Second))
         conn, err := ctx.dvmSock.AcceptUnix()
         if err != nil {
             glog.Error("Cannot accept dvm socket ", err.Error())
@@ -108,6 +110,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
         res,err := readVmMessage(init)
         if err != nil {
             //TODO: deal with error
+            return
         } else if res.code == INIT_ACK {
             ctx.hub <- &CommandAck{
                 reply: cmd.code,
