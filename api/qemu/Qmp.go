@@ -9,7 +9,6 @@ import (
     "dvm/lib/glog"
     "time"
     "syscall"
-    "errors"
 )
 
 type QmpInteraction interface {
@@ -72,11 +71,24 @@ func (qmp *QmpQuit)             MessageType() int { return QMP_QUIT }
 func (qmp *QmpTimeout)          MessageType() int { return QMP_TIMEOUT }
 func (qmp *QmpInternalError)    MessageType() int { return QMP_INTERNAL_ERROR }
 func (qmp *QmpSession)          MessageType() int { return QMP_SESSION }
+func (qmp *QmpSession)          Finish() *QmpFinish {
+    return &QmpFinish {
+        success: true,
+        callback: qmp.callback,
+    }
+}
 func (qmp *QmpFinish)           MessageType() int { return QMP_FINISH }
 
 func (qmp *QmpResult)           MessageType() int { return QMP_RESULT }
 
 func (qmp *QmpError)            MessageType() int { return QMP_ERROR }
+func (qmp *QmpError)            Finish(callback QemuEvent) *QmpFinish {
+    return &QmpFinish{
+        success: false,
+        reason:  qmp.Cause,
+        callback: callback,
+    }
+}
 
 func (qmp *QmpEvent)            MessageType() int { return QMP_EVENT }
 func (qmp *QmpEvent)            Event() int { return EVENT_QMP_EVENT }
@@ -111,10 +123,10 @@ func (qmp *QmpResponse) UnmarshalJSON(raw []byte) error {
     return err
 }
 
-func qmpFail(err error, callback QemuEvent) *QmpFinish {
+func qmpFail(err string, callback QemuEvent) *QmpFinish {
     return &QmpFinish{
         success: false,
-        reason: map[string]interface{}{"error":err.Error(),},
+        reason: map[string]interface{}{"error":err,},
         callback: callback,
     }
 }
@@ -149,7 +161,7 @@ func qmpInitializer(ctx *QemuContext) {
     conn, err := s.AcceptUnix()
     if err != nil {
         glog.Error("accept socket error ", err.Error())
-        ctx.qmp <- qmpFail(err, nil)
+        ctx.qmp <- qmpFail(err.Error(), nil)
         return
     }
     decoder := json.NewDecoder(conn)
@@ -160,7 +172,7 @@ func qmpInitializer(ctx *QemuContext) {
     err = decoder.Decode(&msg)
     if err != nil {
         glog.Error("get qmp welcome failed: ", err.Error())
-        ctx.qmp <- qmpFail(err, nil)
+        ctx.qmp <- qmpFail(err.Error(), nil)
         return
     }
 
@@ -169,13 +181,13 @@ func qmpInitializer(ctx *QemuContext) {
     cmd,err := json.Marshal(QmpCommand{Execute:"qmp_capabilities"})
     if err != nil {
         glog.Error("qmp_capabilities marshal failed ", err.Error())
-        ctx.qmp <- qmpFail(err, nil)
+        ctx.qmp <- qmpFail(err.Error(), nil)
         return
     }
     _, err = conn.Write(cmd)
     if err != nil {
         glog.Error("qmp_capabilities send failed ", err.Error())
-        ctx.qmp <- qmpFail(err, nil)
+        ctx.qmp <- qmpFail(err.Error(), nil)
         return
     }
 
@@ -184,7 +196,7 @@ func qmpInitializer(ctx *QemuContext) {
     err = decoder.Decode(rsp)
     if err != nil {
         glog.Error("response receive failed ", err.Error())
-        ctx.qmp <- qmpFail(err, nil)
+        ctx.qmp <- qmpFail(err.Error(), nil)
         return
     }
 
@@ -199,7 +211,7 @@ func qmpInitializer(ctx *QemuContext) {
         return
     }
 
-    ctx.qmp <- qmpFail(errors.New("handshake failed"), nil)
+    ctx.qmp <- qmpFail("handshake failed", nil)
 }
 
 func scsiId2Name(id int) string {
@@ -356,32 +368,17 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
                 qe = res.(*QmpError)
                 time.Sleep(1000*time.Millisecond)
                 default:
-                //            response,_ := json.Marshal(*res)
-                handler <- &QmpFinish{
-                    success: false,
-                    reason: map[string]interface{}{
-                        "error": "unknown received message type",
-                        "response": []byte{},
-                    },
-                    callback: session.callback,
-                }
+                handler <- qmpFail("unknown received message type", session.callback)
                 return
             }
         }
 
         if ! success {
-            handler <- &QmpFinish{
-                success: false,
-                reason: qe.Cause,
-                callback: session.callback,
-            }
+            handler <- qe.Finish(session.callback)
             return
         }
     }
-    handler <- &QmpFinish{
-        success: true,
-        callback: session.callback,
-    }
+    handler <- session.Finish()
     return
 }
 
