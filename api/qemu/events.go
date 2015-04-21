@@ -106,6 +106,10 @@ type TtyOpenEvent struct {
     TC          *ttyContext
 }
 
+type DeviceFailed struct {
+    session     QemuEvent
+}
+
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
@@ -123,3 +127,4 @@ func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
 func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
 func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
+func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }

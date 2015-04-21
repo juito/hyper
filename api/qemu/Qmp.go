@@ -333,13 +333,7 @@ func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpS
     for _,cmd := range session.commands {
         msg,err := json.Marshal(*cmd)
         if err != nil {
-            handler <- &QmpFinish{
-                success: false,
-                reason: map[string]interface{}{
-                    "error": "cannot marshal command",
-                },
-                callback: session.callback,
-            }
+            handler <- qmpFail("cannot marshal command", session.callback)
             return
         }
 
@@ -421,7 +415,9 @@ func qmpHandler(ctx *QemuContext) {
                         reason = c.(string)
                     }
                     glog.Error("QMP command failed ", reason)
-                    // TODO: fail...
+                    ctx.hub <- &DeviceFailed{
+                        session: r.callback,
+                    }
                 }
                 buf = buf[1:]
                 if len(buf) > 0 {

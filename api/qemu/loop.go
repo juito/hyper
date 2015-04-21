@@ -173,6 +173,17 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                     Code: types.E_INIT_FAIL,
                     Cause: reason,
                 }
+            case ERROR_QMP_FAIL:
+            reason := "QMP protocol exception"
+            if ev.(*DeviceFailed).session != nil {
+                reason = "QMP protocol exception: failed while waiting " + EventString(ev.(*DeviceFailed).session.Event())
+            }
+            glog.Error(reason)
+            ctx.client <- &types.QemuResponse{
+                VmId: ctx.id,
+                Code: types.E_INIT_FAIL,
+                Cause: reason,
+            }
             default:
                 glog.Warning("got event during pod initiating")
         }

@@ -4,6 +4,7 @@ import (
     "testing"
     "net"
     "encoding/json"
+    "time"
 )
 
 func TestMessageParse(t *testing.T) {
@@ -100,6 +101,59 @@ func TestQmpHello(t *testing.T) {
     t.Log("qmp finished")
 }
 
+func TestInitFail(t *testing.T) {
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    t.Log("connecting to ", ctx.qmpSockName)
+
+    c,err := net.Dial("unix", ctx.qmpSockName)
+    if err != nil {
+        t.Error("cannot connect to qmp socket", err.Error())
+    }
+
+    t.Log("connected")
+
+    banner := `{"QMP": {"version": {"qemu": {"micro": 0,"minor": 0,"major": 2},"package": ""},"capabilities": []}}`
+    t.Log("Writting", banner)
+
+    nr,err := c.Write([]byte(banner))
+    if err != nil {
+        t.Error("write banner fail ", err.Error())
+    }
+    t.Log("wrote hello ", nr)
+
+    buf := make([]byte, 1024)
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("fail to get init message")
+    }
+
+    t.Log("received message", string(buf[:nr]))
+
+    var msg interface{}
+    err = json.Unmarshal(buf[:nr], &msg)
+    if err != nil {
+        t.Error("can not read init message to json ", string(buf[:nr]))
+    }
+
+    hello := msg.(map[string]interface{})
+    if hello["execute"].(string) != "qmp_capabilities" {
+        t.Error("message wrong", string(buf[:nr]))
+    }
+
+    c.Write([]byte(`{ "error": {}}`))
+
+    ev := <- qemuChan
+    if ev.Event() != ERROR_INIT_FAIL {
+        t.Error("should got an event")
+    }
+
+    t.Log("qmp init failed")
+}
+
 func TestQmpDiskSession(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
@@ -116,6 +170,51 @@ func TestQmpDiskSession(t *testing.T) {
     nr,err := c.Read(buf)
     if err != nil {
         t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": "success"}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != EVENT_BLOCK_INSERTED {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*BlockdevInsertedEvent)
+    t.Log("got block device", info.Name, info.SourceType, info.DeviceName)
+}
+
+func TestQmpFailOnce(t *testing.T) {
+
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    ctx.qmp <- newDiskAddSession(ctx, "vol1", "volume", "/dev/dm7", "raw", 5)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{"error": {"class": "GenericError", "desc": "QMP input object member 'server' is unexpected"}}`))
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read repeated command 1 in session", err.Error())
     }
     t.Log("received ", string(buf[:nr]))
 
@@ -136,6 +235,49 @@ func TestQmpDiskSession(t *testing.T) {
 
     info := msg.(*BlockdevInsertedEvent)
     t.Log("got block device", info.Name, info.SourceType, info.DeviceName)
+}
+
+func TestQmpKeepFail(t *testing.T) {
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    ctx.qmp <- newDiskAddSession(ctx, "vol1", "volume", "/dev/dm7", "raw", 5)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{"error": {"class": "GenericError", "desc": "QMP input object member 'server' is unexpected"}}`))
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read repeated command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{"error": {"class": "GenericError", "desc": "QMP input object member 'server' is unexpected"}}`))
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read repeated command 1 again in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{"error": {"class": "GenericError", "desc": "QMP input object member 'server' is unexpected"}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != ERROR_QMP_FAIL {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*DeviceFailed)
+    t.Log("got block device", EventString(info.session.Event()))
 }
 
 func TestQmpNetSession(t *testing.T) {
@@ -181,6 +323,46 @@ func TestQmpNetSession(t *testing.T) {
 
     info := msg.(*NetDevInsertedEvent)
     t.Log("got net device", info.Address, info.Index, info.DeviceName)
+}
+
+func TestQmpSerialSession(t *testing.T) {
+
+    qemuChan := make(chan QemuEvent, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+
+    go qmpHandler(ctx)
+
+    c := testQmpInitHelper(t, ctx.qmpSockName)
+    defer c.Close()
+
+    time.Sleep(100 * time.Millisecond)
+
+    ctx.qmp <- newSerialPortSession(ctx, ctx.serialPortPrefix + "0.sock", 0)
+
+    buf := make([]byte, 1024)
+    nr,err := c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 0 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    nr,err = c.Read(buf)
+    if err != nil {
+        t.Error("cannot read command 1 in session", err.Error())
+    }
+    t.Log("received ", string(buf[:nr]))
+
+    c.Write([]byte(`{ "return": {}}`))
+
+    msg := <- qemuChan
+    if msg.Event() != EVENT_SERIAL_ADD {
+        t.Error("wrong type of message", msg.Event())
+    }
+
+    info := msg.(*SerialAddEvent)
+    t.Log("got serial port ", info.PortName)
 }
 
 func TestSessionQueue(t *testing.T) {

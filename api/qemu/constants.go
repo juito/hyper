@@ -16,7 +16,6 @@ const(
     EVENT_QEMU_TIMEOUT
     EVENT_INIT_CONNECTED
     EVENT_QMP_EVENT
-    EVENT_QMP_FAIL
     EVENT_CONTAINER_ADD
     EVENT_CONTAINER_DELETE
     EVENT_VOLUME_ADD
@@ -40,6 +39,7 @@ const(
     COMMAND_DETACH
     COMMAND_ACK
     ERROR_INIT_FAIL
+    ERROR_QMP_FAIL
 )
 
 const(
@@ -84,7 +84,6 @@ func EventString(ev int) string {
         case EVENT_QEMU_TIMEOUT: return "EVENT_QEMU_TIMEOUT"
         case EVENT_INIT_CONNECTED: return "EVENT_INIT_CONNECTED"
         case EVENT_QMP_EVENT: return "EVENT_QMP_EVENT"
-        case EVENT_QMP_FAIL: return "EVENT_QMP_FAIL"
         case EVENT_CONTAINER_ADD: return "EVENT_CONTAINER_ADD"
         case EVENT_CONTAINER_DELETE: return "EVENT_CONTAINER_DELETE"
         case EVENT_VOLUME_ADD: return "EVENT_VOLUME_ADD"
@@ -108,6 +107,7 @@ func EventString(ev int) string {
         case COMMAND_DETACH: return "COMMAND_DETACH"
         case COMMAND_ACK: return "COMMAND_ACK"
         case ERROR_INIT_FAIL: return "ERROR_INIT_FAIL"
+        case ERROR_QMP_FAIL: return "ERROR_QMP_FAIL"
     }
     return "UNKNOWN"
 }
