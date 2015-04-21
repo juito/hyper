@@ -44,6 +44,29 @@ func waitConsoleOutput(ctx *QemuContext) {
     }
 }
 
+func watchDog(ctx* QemuContext) {
+    for {
+        msg,ok := <- ctx.wdt
+        if ok {
+            switch msg {
+                case "quit":
+                glog.V(1).Info("quit watch dog.")
+                return
+                case "kill":
+                if ctx.process != nil {
+                    glog.V(0).Infof("kill Qemu... %d", ctx.process.Pid)
+                    ctx.process.Kill()
+                } else {
+                    glog.Warning("no process to be killed")
+                }
+                return
+            }
+        } else {
+            glog.V(1).Info("chan closed, quit watch dog.")
+        }
+    }
+}
+
 // launchQemu run qemu and wait it's quit, includes
 func launchQemu(ctx *QemuContext) {
     qemu,err := exec.LookPath("qemu-system-x86_64")
@@ -71,6 +94,9 @@ func launchQemu(ctx *QemuContext) {
         return
     }
 
+    ctx.process = cmd.Process
+    go watchDog(ctx)
+
     glog.V(0).Info("Waiting for command to finish...")
 
     err = cmd.Wait()
@@ -81,4 +107,5 @@ func launchQemu(ctx *QemuContext) {
         glog.Info("qemu exit with 0")
         ctx.hub <- &QemuExitEvent{message:"qemu exit with 0"}
     }
+    ctx.wdt <- "quit"
 }

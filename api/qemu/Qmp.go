@@ -137,6 +137,7 @@ func qmpReceiver(ch chan QmpInteraction, decoder *json.Decoder) {
         rsp := &QmpResponse{}
         if err := decoder.Decode(rsp); err == io.EOF {
             glog.Info("QMP exit as got EOF")
+            ch <- &QmpInternalError{cause:err.Error()}
             return
         } else if err != nil {
             glog.Error("QMP receive and decode error: ", err.Error())
@@ -433,8 +434,9 @@ func qmpHandler(ctx *QemuContext) {
                     handler = nil
                 }
             case QMP_INTERNAL_ERROR:
-//                ctx.hub <-
-                go qmpReceiver(ctx.qmp, json.NewDecoder(conn))
+                handler = nil
+                glog.Info("QMP handler quit as received ",  msg.(*QmpInternalError).cause)
+//                ctx.hub <- QemuExitEvent{ msg: msg.(*QmpInternalError).cause, }
             case QMP_QUIT:
                 handler = nil
         }

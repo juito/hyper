@@ -254,6 +254,11 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
             case EVENT_QEMU_TIMEOUT:
                 glog.Warning("Qemu did not exit in time, try to stop it")
                 ctx.qmp <- newQuitSession()
+                time.AfterFunc(10*time.Second, func(){
+                    if ctx != nil && ctx.handler != nil {
+                        ctx.wdt <- "kill"
+                    }
+                })
         }
     }
 }

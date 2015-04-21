@@ -26,12 +26,15 @@ type QemuContext struct {
     qmp chan QmpInteraction
     vm  chan *DecodedMessage
     client chan *types.QemuResponse
+    wdt chan string
 
     qmpSockName string
     dvmSockName string
     consoleSockName  string
     serialPortPrefix string
     shareDir    string
+
+    process     *os.Process
 
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
@@ -182,11 +185,13 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         client:     client,
         qmp:        qmpChannel,
         vm:         vmChannel,
+        wdt:        make(chan string, 16),
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
         consoleSockName: consoleSockName,
         serialPortPrefix: serialPortPrefix,
         shareDir:   shareDir,
+        process:    nil,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
         consoleSock:consoleSock,
