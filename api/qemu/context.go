@@ -9,6 +9,7 @@ import (
     "log"
     "dvm/api/types"
     "dvm/lib/glog"
+    "time"
 )
 
 type QemuContext struct {
@@ -27,6 +28,8 @@ type QemuContext struct {
     vm  chan *DecodedMessage
     client chan *types.QemuResponse
     wdt chan string
+
+    timer       *time.Timer
 
     qmpSockName string
     dvmSockName string
@@ -412,6 +415,8 @@ func (ctx* QemuContext) Lookup(container string) int {
 }
 
 func (ctx *QemuContext) Close() {
+    ctx.lock.Lock()
+    defer ctx.lock.Unlock()
     close(ctx.qmp)
     close(ctx.vm)
     close(ctx.wdt)
@@ -419,6 +424,7 @@ func (ctx *QemuContext) Close() {
     ctx.dvmSock.Close()
     os.Remove(ctx.dvmSockName)
     os.Remove(ctx.qmpSockName)
+    ctx.handler = nil
 }
 
 func (ctx *QemuContext) Become(handler stateHandler) {

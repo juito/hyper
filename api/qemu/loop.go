@@ -7,6 +7,7 @@ import (
     "encoding/json"
     "fmt"
     "time"
+    "os"
 )
 
 func onQemuExit(ctx *QemuContext) {
@@ -15,7 +16,49 @@ func onQemuExit(ctx *QemuContext) {
         Code: types.E_SHUTDOWM,
         Cause: "qemu shut down",
     }
-    ctx.Close()
+
+    ctx.timer = time.AfterFunc(60 * time.Second, func(){ ctx.hub <- &QemuTimeout{} })
+
+    removeDevice(ctx)
+
+    if ctx.deviceReady() {
+        glog.V(1).Info("no device to release/remove/umount, quit")
+        ctx.timer.Stop()
+        ctx.Close()
+    }
+}
+
+func removeDevice(ctx *QemuContext) {
+
+    for name,vol := range ctx.devices.volumeMap {
+        if vol.info.fstype == "dir" {
+            glog.V(1).Info("need umount dir ", vol.info.filename)
+            //TODO: umount dir
+            ctx.hub <- &VolumeUnmounted{ Name: name, }
+            ctx.progress.deleting.volumes[name] = true
+        }
+    }
+
+    for idx,container := range ctx.vmSpec.Containers {
+        if container.Fstype == "dir" {
+            glog.V(1).Info("need unmount aufs", container.Image)
+            //TODO: umount aufs
+            ctx.hub <- &ContainerUnmounted{ Index: idx, }
+            ctx.progress.deleting.containers[idx] = true
+        }
+    }
+
+    for idx,tty := range ctx.devices.ttyMap {
+        glog.V(1).Infof("remove %d tty sock: %s", idx, tty.socketName)
+        os.Remove(tty.socketName)
+    }
+
+    for idx,nic := range ctx.devices.networkMap {
+        glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
+        //TODO: release interface
+        ctx.hub <- &InterfaceReleased{ Index: idx, }
+        ctx.progress.deleting.networks[idx] = true
+    }
 }
 
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
@@ -61,12 +104,14 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
     case EVENT_QEMU_EXIT:
         glog.Info("Qemu has exit, go to cleaning up")
+        ctx.timer.Stop()
         ctx.Become(stateCleaningUp)
         onQemuExit(ctx)
     case EVENT_QMP_EVENT:
         event := ev.(*QmpEvent)
         if event.Type == QMP_EVENT_SHUTDOWN {
             glog.Info("Got QMP shutdown event, go to cleaning up")
+            ctx.timer.Stop()
             ctx.Become(stateCleaningUp)
         } else {
             processed = false
@@ -74,14 +119,14 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
     case ERROR_INTERRUPTED:
         glog.Info("Connection interrupted, quit...")
         ctx.Become(stateTerminating)
-        time.AfterFunc(3*time.Second, func(){
+        ctx.timer = time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
                 ctx.hub <- &QemuTimeout{}
             }
         })
     case COMMAND_SHUTDOWN:
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
-        time.AfterFunc(3*time.Second, func(){
+        ctx.timer = time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
                 ctx.hub <- &QemuTimeout{}
             }
@@ -133,6 +178,33 @@ func deviceInitHandler(ctx *QemuContext, ev QemuEvent) bool {
     return processed
 }
 
+func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
+    processed := true
+    switch ev.Event() {
+        case EVENT_CONTAINER_DELETE:
+            c := ev.(*ContainerUnmounted)
+            if _,ok := ctx.progress.deleting.containers[c.Index]; ok {
+                glog.V(1).Infof("container %d umounted", c.Index)
+                delete(ctx.progress.deleting.containers, c.Index)
+            }
+        case EVENT_INTERFACE_DELETE:
+            nic := ev.(*InterfaceReleased)
+            if _,ok := ctx.progress.deleting.networks[nic.Index]; ok {
+                glog.V(1).Infof("interface %d released", nic.Index)
+                delete(ctx.progress.deleting.networks, nic.Index)
+            }
+        case EVENT_VOLUME_DELETE:
+            v := ev.(*VolumeUnmounted)
+            if _,ok := ctx.progress.deleting.volumes[v.Name]; ok {
+                glog.V(1).Infof("volume %s umounted", v.Name)
+                delete(ctx.progress.deleting.volumes, v.Name)
+            }
+        default:
+        processed = false
+    }
+    return processed
+}
+
 func initFailureHandler(ctx *QemuContext, ev QemuEvent) bool {
     processed := true
     switch ev.Event() {
@@ -152,6 +224,13 @@ func initFailureHandler(ctx *QemuContext, ev QemuEvent) bool {
             ctx.client <- &types.QemuResponse{
                 VmId: ctx.id,
                 Code: types.E_DEVICE_FAIL,
+                Cause: reason,
+            }
+        case EVENT_QEMU_TIMEOUT:
+            reason := "Start POD timeout"
+            ctx.client <- &types.QemuResponse{
+                VmId: ctx.id,
+                Code: types.E_COMMAND_TIMEOUT,
                 Cause: reason,
             }
         default:
@@ -178,6 +257,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 go waitCmdToInit(ctx, event.conn)
             case COMMAND_RUN_POD:
                 glog.Info("got spec, prepare devices")
+                ctx.timer = time.AfterFunc(60 * time.Second, func(){ ctx.hub <- &QemuTimeout{} } )
                 prepareDevice(ctx, ev.(*RunPodCommand).Spec)
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
@@ -188,6 +268,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                         Code: types.E_OK,
                         Cause: "Start POD success",
                     }
+                    ctx.timer.Stop()
                     ctx.Become(stateRunning)
                 } else {
                     glog.Warning("wrong reply to ", string(ack.reply), string(ack.msg))
@@ -262,7 +343,7 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
             case EVENT_QEMU_TIMEOUT:
                 glog.Warning("Qemu did not exit in time, try to stop it")
                 ctx.qmp <- newQuitSession()
-                time.AfterFunc(10*time.Second, func(){
+                ctx.timer = time.AfterFunc(10*time.Second, func(){
                     if ctx != nil && ctx.handler != nil {
                         ctx.wdt <- "kill"
                     }
@@ -272,13 +353,23 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
 }
 
 func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
-    switch ev.Event() {
-        case EVENT_QEMU_EXIT:
-            glog.Info("Qemu has exit [cleaning up]")
-            onQemuExit(ctx)
-            ctx.Become(nil)
-        default:
-            glog.Warning("got event during pod cleaning up")
+    if processed := deviceRemoveHandler(ctx, ev) ; processed {
+        if ctx.deviceReady() {
+            glog.V(1).Info("all devices released/removed/umounted, quit")
+            ctx.timer.Stop()
+            ctx.Close()
+        }
+    } else {
+        switch ev.Event() {
+            case EVENT_QEMU_EXIT:
+                glog.Info("Qemu has exit [cleaning up]")
+                onQemuExit(ctx)
+            case EVENT_QEMU_TIMEOUT:
+                glog.Info("Device removing timeout")
+                ctx.Close()
+            default:
+                glog.Warning("got event during pod cleaning up")
+        }
     }
 }
 
