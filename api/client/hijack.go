@@ -41,6 +41,9 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 	req.Host = cli.addr
 
 	dial, err := cli.dial()
+	if err != nil {
+		return err
+	}
 	// When we set up a TCP connection for hijack, there could be long periods
 	// of inactivity (a long running command with no output) that in certain
 	// network setups may cause ECONNTIMEOUT, leaving the client in an unknown
@@ -52,7 +55,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 	}
 	if err != nil {
 		if strings.Contains(err.Error(), "connection refused") {
-			return fmt.Errorf("Cannot connect to the Docker daemon. Is 'docker -d' running on this host?")
+			return fmt.Errorf("Cannot connect to the Docker daemon. Is 'dameon' running on this host?")
 		}
 		return err
 	}
@@ -60,7 +63,10 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 	defer clientconn.Close()
 
 	// Server hijacks the connection, error 'connection closed' expected
-	clientconn.Do(req)
+	_, err = clientconn.Do(req)
+	if err != nil {
+		fmt.Printf("Client DO: %s\n", err.Error())
+	}
 
 	rwc, br := clientconn.Hijack()
 	defer rwc.Close()
@@ -95,7 +101,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			if setRawTerminal && stdout != nil {
 				_, err = io.Copy(stdout, br)
 			}
-			fmt.Printf("[hijack] End of stdout")
+			fmt.Printf("[hijack] End of stdout\n")
 			return err
 		})
 	}
@@ -103,7 +109,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 	sendStdin := promise.Go(func() error {
 		if in != nil {
 			io.Copy(rwc, in)
-			fmt.Printf("[hijack] End of stdin")
+			fmt.Printf("[hijack] End of stdin\n")
 		}
 
 		if conn, ok := rwc.(interface {
@@ -119,14 +125,14 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	if stdout != nil || stderr != nil {
 		if err := <-receiveStdout; err != nil {
-			fmt.Printf("Error receiveStdout: %s", err.Error())
+			fmt.Printf("Error receiveStdout: %s\n", err.Error())
 			return err
 		}
 	}
 
 	if !cli.isTerminalIn {
 		if err := <-sendStdin; err != nil {
-			fmt.Printf("Error sendStdin: %s", err.Error())
+			fmt.Printf("Error sendStdin: %s\n", err.Error())
 			return err
 		}
 	}

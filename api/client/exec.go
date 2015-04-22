@@ -30,9 +30,9 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	)
 	// Block the return until the chan gets closed
 	defer func() {
-		fmt.Printf("End of CmdExec(), Waiting for hijack to finish.")
+		fmt.Printf("End of CmdExec(), Waiting for hijack to finish.\n")
 		if _, ok := <-hijacked; ok {
-			fmt.Printf("Hijack did not finish (chan still open)")
+			fmt.Printf("Hijack did not finish (chan still open)\n")
 		}
 	}()
 
@@ -53,6 +53,11 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 			fmt.Printf("Error hijack: %s", err.Error())
 			return err
 		}
+	}
+
+	if err := <-errCh; err != nil {
+		fmt.Printf("Error hijack: %s", err.Error())
+		return err
 	}
 	fmt.Printf("Success to exec the command %s for POD %s!\n", command, podName)
 	return nil

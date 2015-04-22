@@ -2,10 +2,9 @@ package daemon
 
 import (
 	"fmt"
-	"strings"
+	"io"
+	"bufio"
 	"dvm/engine"
-	"dvm/api/qemu"
-	"dvm/api/types"
 	"dvm/lib/glog"
 )
 
@@ -25,34 +24,47 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 	if err != nil {
 		return err
 	}
+	fmt.Printf("%s\n", vmid)
+	var (
+		stop = make(chan bool, 1)
+		input = make(chan string, 1)
+		cStdout io.Writer
+		cStdin  io.ReadCloser
+	)
+	r, w := io.Pipe()
+	go func() {
+		defer w.Close()
+		defer glog.V(1).Info("Close the io Pipe!")
+		io.Copy(w, job.Stdin)
+	} ()
+	cStdin = r
+	cStdout = job.Stdout
+	go func() {
+		for i:=0; i< 10; i ++ {
+			glog.V(1).Infof("i: %d!", i)
+			fmt.Fprintf(cStdout, "i : %d\n", i)
+		}
+		glog.V(1).Info("Send stop signal to main process!")
+		stop <- true
+	} ()
 
-	qemuEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
-	if err != nil {
-		return err
-	}
 
-	execCommandEvent := &qemu.ExecCommand {
-		Command: strings.Split(command, " "),
-	}
-	qemuEvent.(chan qemu.QemuEvent) <-execCommandEvent
-	// wait for the qemu response
-	var qemuResponse *types.QemuResponse
+	go func () {
+		reader := bufio.NewReader(cStdin)
+		data, _, _ := reader.ReadLine()
+		command := string(data)
+		glog.V(1).Infof("command from client : %s!", command)
+		input <- command
+	} ()
+
 	for {
-		qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
-		if qemuResponse.Code == types.E_SHUTDOWM {
-			break
+		select {
+		case <-stop:
+				glog.Info("The exec program is stopped!")
+		case command := <-input:
+				glog.Info("find a command, %s", command)
+				return nil
 		}
 	}
-	close(qemuStatus.(chan *types.QemuResponse))
-
-	// Prepare the qemu status to client
-	v := &engine.Env{}
-	v.Set("ID", podName)
-	v.SetInt("Code", qemuResponse.Code)
-	v.Set("Cause", qemuResponse.Cause)
-	if _, err := v.WriteTo(job.Stdout); err != nil {
-		return err
-	}
-
 	return nil
 }
