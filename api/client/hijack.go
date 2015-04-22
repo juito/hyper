@@ -3,11 +3,14 @@ package client
 import (
 	"fmt"
 	"io"
+	"os"
+	"os/signal"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 	"time"
+	"syscall"
 
 	"dvm/api"
 	"dvm/lib/term"
@@ -85,6 +88,16 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			return err
 		}
 		defer term.RestoreTerminal(cli.inFd, oldState)
+		// SIGINT is handled by term.SetRawTerminal (it runs a goroutine that listens
+		// for SIGINT and restores the terminal before exiting)
+		// this handles SIGTERM
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, syscall.SIGTERM)
+		go func() {
+			<-sigChan
+			term.RestoreTerminal(cli.inFd, oldState)
+			os.Exit(0)
+		}()
 	}
 
 	if stdout != nil || stderr != nil {
@@ -99,6 +112,8 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 			// When TTY is ON, use regular copy
 			if setRawTerminal && stdout != nil {
+				_, err = io.Copy(stdout, br)
+			} else {
 				_, err = io.Copy(stdout, br)
 			}
 			fmt.Printf("[hijack] End of stdout\n")

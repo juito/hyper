@@ -50,20 +50,24 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 
 
 	go func () {
-		reader := bufio.NewReader(cStdin)
-		data, _, _ := reader.ReadLine()
-		command := string(data)
-		glog.V(1).Infof("command from client : %s!", command)
-		input <- command
+		for {
+			reader := bufio.NewReader(cStdin)
+			data, _, _ := reader.ReadLine()
+			command := string(data)
+			glog.V(1).Infof("command from client : %s!", command)
+			input <- command
+		}
 	} ()
 
 	for {
 		select {
 		case <-stop:
-				glog.Info("The exec program is stopped!")
+				glog.Info("The output program is stopped!")
 		case command := <-input:
-				glog.Info("find a command, %s", command)
-				return nil
+				glog.Infof("find a command, %s", command)
+				if command == "hello" {
+					return nil
+				}
 		}
 	}
 	return nil
