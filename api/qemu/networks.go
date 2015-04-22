@@ -5,6 +5,7 @@ import (
     "dvm/lib/glog"
     "fmt"
     "net"
+    "os"
 )
 
 func CreateInterface(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent) {
@@ -18,6 +19,14 @@ func CreateInterface(index int, pciAddr int, name string, isDefault bool, callba
     }
 
     interfaceGot(index, pciAddr, name, isDefault, callback, inf)
+}
+
+func ReleaseInterface(index int, ipAddr string, file *os.File, callback chan QemuEvent) {
+    err := network.Release(ipAddr, file)
+    if err != nil {
+        glog.Warning("Unable to release network interface, address: ", ipAddr)
+    }
+    callback <- &InterfaceReleased{ Index: index, }
 }
 
 func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent, inf *network.Settings) {
@@ -50,7 +59,7 @@ func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback 
         Index:      index,
         PCIAddr:    pciAddr,
         DeviceName: name,
-        Fd:         uint64(inf.File.Fd()),
+        Fd:         inf.File,
         IpAddr:     ip.String(),
         NetMask:    mask.String(),
         RouteTable: rt,

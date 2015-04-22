@@ -33,18 +33,16 @@ func removeDevice(ctx *QemuContext) {
     for name,vol := range ctx.devices.volumeMap {
         if vol.info.fstype == "dir" {
             glog.V(1).Info("need umount dir ", vol.info.filename)
-            //TODO: umount dir
-            ctx.hub <- &VolumeUnmounted{ Name: name, }
             ctx.progress.deleting.volumes[name] = true
+            go UmountVolume(ctx.shareDir, vol.info.filename, &VolumeUnmounted{ Name: name, }, ctx.hub)
         }
     }
 
     for idx,container := range ctx.vmSpec.Containers {
         if container.Fstype == "dir" {
             glog.V(1).Info("need unmount aufs", container.Image)
-            //TODO: umount aufs
-            ctx.hub <- &ContainerUnmounted{ Index: idx, }
             ctx.progress.deleting.containers[idx] = true
+            go UmountAufsContainer(ctx.shareDir, container.Image, &ContainerUnmounted{ Index: idx, }, ctx.hub)
         }
     }
 
@@ -55,9 +53,8 @@ func removeDevice(ctx *QemuContext) {
 
     for idx,nic := range ctx.devices.networkMap {
         glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
-        //TODO: release interface
-        ctx.hub <- &InterfaceReleased{ Index: idx, }
         ctx.progress.deleting.networks[idx] = true
+        go ReleaseInterface(idx, nic.IpAddr, nic.Fd, ctx.hub)
     }
 }
 
@@ -162,7 +159,7 @@ func deviceInitHandler(ctx *QemuContext, ev QemuEvent) bool {
         case EVENT_INTERFACE_ADD:
             info := ev.(*InterfaceCreated)
             ctx.interfaceCreated(info)
-            ctx.qmp <- newNetworkAddSession(ctx, info.Fd, info.DeviceName, info.Index, info.PCIAddr)
+            ctx.qmp <- newNetworkAddSession(ctx, uint64(info.Fd.Fd()), info.DeviceName, info.Index, info.PCIAddr)
         case EVENT_INTERFACE_INSERTED:
             info := ev.(*NetDevInsertedEvent)
             ctx.netdevInserted(info)

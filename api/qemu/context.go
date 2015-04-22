@@ -424,6 +424,8 @@ func (ctx *QemuContext) Close() {
     ctx.dvmSock.Close()
     os.Remove(ctx.dvmSockName)
     os.Remove(ctx.qmpSockName)
+    os.Remove(ctx.consoleSockName)
+    os.RemoveAll(ctx.shareDir)
     ctx.handler = nil
 }
 

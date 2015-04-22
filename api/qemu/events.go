@@ -3,6 +3,7 @@ package qemu
 import (
     "net"
     "dvm/api/pod"
+    "os"
 )
 
 type QemuEvent interface {
@@ -85,7 +86,7 @@ type BlockdevInsertedEvent struct {
 type InterfaceCreated struct {
     Index       int
     PCIAddr     int
-    Fd          uint64
+    Fd          *os.File
     DeviceName  string
     IpAddr      string
     NetMask     string
