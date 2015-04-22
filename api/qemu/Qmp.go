@@ -258,6 +258,26 @@ func newDiskAddSession(ctx *QemuContext, name, sourceType, filename, format stri
     }
 }
 
+func newDiskDelSession(ctx *QemuContext, id int, callback QemuEvent) *QmpSession {
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "device_del",
+        Arguments: map[string]interface{}{
+            "id":"scsi-disk" + strconv.Itoa(id),
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute: "human-monitor-command",
+        Arguments: map[string]interface{}{
+            "command-line": fmt.Sprintf("drive_del scsi-disk%d", id),
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+        callback: callback,
+    }
+}
+
 func newNetworkAddSession(ctx *QemuContext, fd uint64, device string, index, addr int) *QmpSession {
     busAddr := fmt.Sprintf("0x%x", addr)
     commands := make([]*QmpCommand, 3)
@@ -283,6 +303,7 @@ func newNetworkAddSession(ctx *QemuContext, fd uint64, device string, index, add
             "netdev":device,
             "bus":"pci.0",
             "addr":busAddr,
+            "id": device,
         },
     }
 
@@ -293,6 +314,26 @@ func newNetworkAddSession(ctx *QemuContext, fd uint64, device string, index, add
             DeviceName: device,
             Address:    addr,
         },
+    }
+}
+
+func newNetworkDelSession(ctx *QemuContext, device string, callback QemuEvent) *QmpSession {
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "device_del",
+        Arguments: map[string]interface{}{
+            "id":device,
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute:"netdev_del",
+        Arguments: map[string]interface{}{
+            "id":device,
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+        callback: callback,
     }
 }
 
@@ -327,6 +368,26 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
             Index: idx,
             PortName: ttysName,
         },
+    }
+}
+
+func newSerialDelSession(ctx *QemuContext, idx int, callback QemuEvent) *QmpSession {
+    commands := make([]*QmpCommand, 2)
+    commands[0] = &QmpCommand{
+        Execute: "device_del",
+        Arguments: map[string]interface{}{
+            "id": "ttys" + strconv.Itoa(idx),
+        },
+    }
+    commands[1] = &QmpCommand{
+        Execute: "chardev-remove",
+        Arguments: map[string]interface{}{
+            "id": "podttys" + strconv.Itoa(idx),
+        },
+    }
+    return &QmpSession{
+        commands: commands,
+        callback: callback,
     }
 }
 
