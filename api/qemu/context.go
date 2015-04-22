@@ -69,6 +69,7 @@ type blockDescriptor struct {
     format      string
     fstype      string
     deviceName  string
+    scsiId      int
 }
 
 type imageInfo struct {
@@ -319,10 +320,13 @@ func (ctx* QemuContext) blockdevInserted(info *BlockdevInsertedEvent) {
 
     if info.SourceType == "image" {
         image := ctx.devices.imageMap[info.Name]
+        image.info.deviceName = info.DeviceName
+        image.info.scsiId     = info.ScsiId
         ctx.vmSpec.Containers[image.pos].Image = info.DeviceName
     } else if info.SourceType == "volume" {
         volume := ctx.devices.volumeMap[info.Name]
         volume.info.deviceName = info.DeviceName
+        volume.info.scsiId     = info.ScsiId
         for c,vol := range volume.pos {
             ctx.vmSpec.Containers[c].Volumes = append(ctx.vmSpec.Containers[c].Volumes,
                 VmVolumeDescriptor{

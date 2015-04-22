@@ -58,6 +58,36 @@ func removeDevice(ctx *QemuContext) {
     }
 }
 
+func detatchDevice(ctx *QemuContext) {
+    for name,vol := range ctx.devices.volumeMap {
+        if vol.info.format == "raw" || vol.info.format == "qcow2" {
+            glog.V(1).Infof("need detach volume %s (%s) ", name, vol.info.deviceName)
+            ctx.qmp <- newDiskDelSession(ctx, vol.info.scsiId, &VolumeUnmounted{ Name: name, })
+            ctx.progress.deleting.volumes[name] = true
+        }
+    }
+
+    for _,image := range ctx.devices.imageMap {
+        if image.info.fstype != "dir" {
+            glog.V(1).Infof("need eject no.%d image block device: %s", image.pos, image.info.deviceName)
+            ctx.progress.deleting.containers[image.pos] = true
+            ctx.qmp <- newDiskDelSession(ctx, image.info.scsiId, &ContainerUnmounted{ Index: image.pos, })
+        }
+    }
+
+    for idx,tty := range ctx.devices.ttyMap {
+        glog.V(1).Infof("detach %d tty sock: %s", idx, tty.socketName)
+        ctx.progress.deleting.serialPorts[idx] = true
+        ctx.qmp <- newSerialDelSession(ctx, idx, nil)
+    }
+
+    for idx,nic := range ctx.devices.networkMap {
+        glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
+        ctx.progress.deleting.networks[idx] = true
+        ctx.qmp <- newNetworkDelSession(ctx, nic.DeviceName, nil)
+    }
+}
+
 func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     networks := 1
     ctx.InitDeviceContext(spec, networks)
@@ -122,6 +152,7 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
             }
         })
     case COMMAND_SHUTDOWN:
+//        detatchDevice(ctx)
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
         ctx.timer = time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
@@ -394,6 +425,9 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
         if !ok {
             glog.Error("hub chan has already been closed")
             break
+        } else if ev == nil {
+            glog.V(1).Info("got nil event.")
+            continue
         }
         glog.V(1).Infof("main event loop got message %d(%s)", ev.Event(), EventString(ev.Event()))
         context.handler(context, ev)

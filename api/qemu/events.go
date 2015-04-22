@@ -81,6 +81,7 @@ type BlockdevInsertedEvent struct {
     Name        string
     SourceType  string //image or volume
     DeviceName  string
+    ScsiId      int
 }
 
 type InterfaceCreated struct {
