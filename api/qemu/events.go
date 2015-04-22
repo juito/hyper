@@ -28,6 +28,10 @@ type RunPodCommand struct {
     Spec *pod.UserPod
 }
 
+type ReplacePodCommand struct {
+    NewSpec *pod.UserPod
+}
+
 type ExecCommand struct {
     Command []string `json:"cmd"`
     Container string `json:"container,omitempty"`
@@ -110,9 +114,17 @@ type NetDevInsertedEvent struct {
     Address     int
 }
 
+type NetDevRemovedEvent struct {
+    Index       int
+}
+
 type SerialAddEvent struct {
     Index       int
     PortName    string
+}
+
+type SerialDelEvent struct {
+    Index       int
 }
 
 type TtyOpenEvent struct {
@@ -132,6 +144,7 @@ func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
+func (qe* ReplacePodCommand)        Event() int { return COMMAND_REPLACE_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
 func (qe* AttachCommand)            Event() int { return COMMAND_ATTACH }
 func (qe* DetachCommand)            Event() int { return COMMAND_DETACH }
@@ -141,10 +154,12 @@ func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
 func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
 func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
+func (qe* NetDevRemovedEvent)       Event() int { return EVENT_INTERFACE_EJECTED }
 func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
 func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
 func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
 func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
+func (qe* SerialDelEvent)           Event() int { return EVENT_SERIAL_DELETE }
 func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }
 func (qe* Interrupted)              Event() int { return ERROR_INTERRUPTED }
 func (qe* InterfaceReleased)        Event() int { return EVENT_INTERFACE_DELETE }

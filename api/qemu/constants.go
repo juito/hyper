@@ -33,6 +33,7 @@ const(
     EVENT_TTY_OPEN
     EVENT_TTY_CLOSE
     COMMAND_RUN_POD
+    COMMAND_REPLACE_POD
     COMMAND_SHUTDOWN
     COMMAND_EXEC
     COMMAND_ATTACH
@@ -66,6 +67,7 @@ const(
     INIT_READY
     INIT_ACK
     INIT_ERROR
+    INIT_STOPPOD
 )
 
 const (
@@ -102,6 +104,7 @@ func EventString(ev int) string {
         case EVENT_TTY_OPEN: return "EVENT_TTY_OPEN"
         case EVENT_TTY_CLOSE: return "EVENT_TTY_CLOSE"
         case COMMAND_RUN_POD: return "COMMAND_RUN_POD"
+        case COMMAND_REPLACE_POD: return "COMMAND_REPLACE_POD"
         case COMMAND_SHUTDOWN: return "COMMAND_SHUTDOWN"
         case COMMAND_EXEC: return "COMMAND_EXEC"
         case COMMAND_ATTACH: return "COMMAND_ATTACH"

@@ -30,21 +30,8 @@ func onQemuExit(ctx *QemuContext) {
 
 func removeDevice(ctx *QemuContext) {
 
-    for name,vol := range ctx.devices.volumeMap {
-        if vol.info.fstype == "dir" {
-            glog.V(1).Info("need umount dir ", vol.info.filename)
-            ctx.progress.deleting.volumes[name] = true
-            go UmountVolume(ctx.shareDir, vol.info.filename, &VolumeUnmounted{ Name: name, }, ctx.hub)
-        }
-    }
-
-    for idx,container := range ctx.vmSpec.Containers {
-        if container.Fstype == "dir" {
-            glog.V(1).Info("need unmount aufs", container.Image)
-            ctx.progress.deleting.containers[idx] = true
-            go UmountAufsContainer(ctx.shareDir, container.Image, &ContainerUnmounted{ Index: idx, }, ctx.hub)
-        }
-    }
+    ctx.releaseVolumeDir()
+    ctx.releaseAufsDir()
 
     for idx,tty := range ctx.devices.ttyMap {
         glog.V(1).Infof("remove %d tty sock: %s", idx, tty.socketName)
@@ -59,32 +46,20 @@ func removeDevice(ctx *QemuContext) {
 }
 
 func detatchDevice(ctx *QemuContext) {
-    for name,vol := range ctx.devices.volumeMap {
-        if vol.info.format == "raw" || vol.info.format == "qcow2" {
-            glog.V(1).Infof("need detach volume %s (%s) ", name, vol.info.deviceName)
-            ctx.qmp <- newDiskDelSession(ctx, vol.info.scsiId, &VolumeUnmounted{ Name: name, })
-            ctx.progress.deleting.volumes[name] = true
-        }
-    }
 
-    for _,image := range ctx.devices.imageMap {
-        if image.info.fstype != "dir" {
-            glog.V(1).Infof("need eject no.%d image block device: %s", image.pos, image.info.deviceName)
-            ctx.progress.deleting.containers[image.pos] = true
-            ctx.qmp <- newDiskDelSession(ctx, image.info.scsiId, &ContainerUnmounted{ Index: image.pos, })
-        }
-    }
+    ctx.removeVolumeDrive()
+    ctx.removeImageDrive()
 
     for idx,tty := range ctx.devices.ttyMap {
         glog.V(1).Infof("detach %d tty sock: %s", idx, tty.socketName)
         ctx.progress.deleting.serialPorts[idx] = true
-        ctx.qmp <- newSerialDelSession(ctx, idx, nil)
+        ctx.qmp <- newSerialDelSession(ctx, idx, &SerialDelEvent{Index:idx})
     }
 
     for idx,nic := range ctx.devices.networkMap {
         glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
         ctx.progress.deleting.networks[idx] = true
-        ctx.qmp <- newNetworkDelSession(ctx, nic.DeviceName, nil)
+        ctx.qmp <- newNetworkDelSession(ctx, nic.DeviceName, &NetDevRemovedEvent{Index:idx,})
     }
 }
 
@@ -227,6 +202,19 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
                 glog.V(1).Infof("volume %s umounted", v.Name)
                 delete(ctx.progress.deleting.volumes, v.Name)
             }
+        case EVENT_SERIAL_DELETE:
+            s := ev.(*SerialDelEvent)
+            tty := ctx.devices.ttyMap[s.Index]
+            glog.V(1).Infof("remove %d tty sock: %s", s.Index, tty.socketName)
+            os.Remove(tty.socketName)
+            if _,ok := ctx.progress.deleting.serialPorts[s.Index]; ok {
+                delete(ctx.progress.deleting.serialPorts, s.Index)
+            }
+        case EVENT_INTERFACE_EJECTED:
+            n := ev.(*NetDevRemovedEvent)
+            nic := ctx.devices.networkMap[n.Index]
+            glog.V(1).Infof("release %d interface: %s", n.Index, nic.IpAddr)
+            go ReleaseInterface(n.Index, nic.IpAddr, nic.Fd, ctx.hub)
         default:
         processed = false
     }
@@ -285,12 +273,14 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                 go waitCmdToInit(ctx, event.conn)
             case COMMAND_RUN_POD:
                 glog.Info("got spec, prepare devices")
+                ctx.transition = ev.(*RunPodCommand)
                 ctx.timer = time.AfterFunc(60 * time.Second, func(){ ctx.hub <- &QemuTimeout{} } )
                 prepareDevice(ctx, ev.(*RunPodCommand).Spec)
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_STARTPOD {
                     glog.Info("run success", string(ack.msg))
+                    ctx.transition = nil
                     ctx.client <- &types.QemuResponse{
                         VmId: ctx.id,
                         Code: types.E_OK,
@@ -310,28 +300,44 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
 func stateRunning(ctx *QemuContext, ev QemuEvent) {
     if processed := commonStateHandler(ctx, ev); !processed {
         switch ev.Event() {
-            case COMMAND_EXEC:
-            cmd := ev.(*ExecCommand)
-            pkg,err := json.Marshal(*cmd)
-            if err != nil {
-                ctx.client <- &types.QemuResponse{
-                    VmId: ctx.id,
-                    Code: types.E_JSON_PARSE_FAIL,
-                    Cause: fmt.Sprintf("command %s parse failed", cmd.Command,),
+            case COMMAND_REPLACE_POD:
+                cmd := ev.(*ReplacePodCommand)
+                if ctx.transition != nil {
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running",}
+                    return
                 }
-                return
-            }
-            ctx.vm <- &DecodedMessage{
-                code: INIT_EXECCMD,
-                message: pkg,
-            }
+                ctx.transition = cmd
+                ctx.vm <- &DecodedMessage{
+                    code:       INIT_STOPPOD,
+                    message:    []byte{},
+                }
+                ctx.Become(statePodTransiting)
+            case COMMAND_EXEC:
+                cmd := ev.(*ExecCommand)
+                if ctx.transition != nil {
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running",}
+                    return
+                }
+                pkg,err := json.Marshal(*cmd)
+                if err != nil {
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+                        Cause: fmt.Sprintf("command %s parse failed", cmd.Command,),
+                    }
+                    return
+                }
+                ctx.transition = cmd
+                ctx.vm <- &DecodedMessage{
+                    code: INIT_EXECCMD,
+                    message: pkg,
+                }
             case COMMAND_ACK:
-            ack := ev.(*CommandAck)
-            if ack.reply == INIT_EXECCMD {
-                glog.Info("exec dvm run confirmed", string(ack.msg))
-            } else {
-                glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
-            }
+                ack := ev.(*CommandAck)
+                if ack.reply == INIT_EXECCMD {
+                    glog.Info("exec dvm run confirmed", string(ack.msg))
+                    ctx.transition = nil
+                } else {
+                    glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
+                }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
                 if cmd.container == "" { //console
@@ -354,6 +360,30 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             default:
                 glog.Warning("got event during pod running")
+        }
+    }
+}
+
+func statePodTransiting(ctx *QemuContext, ev QemuEvent) {
+    if processed := commonStateHandler(ctx, ev); processed {
+    } else if processed := deviceRemoveHandler(ctx, ev); processed {
+        if ctx.deviceReady() {
+            glog.V(1).Info("device ready, could run pod.")
+            prepareDevice(ctx, ctx.transition.(*ReplacePodCommand).NewSpec)
+            ctx.Become(stateInit)
+        }
+    } else if processed := initFailureHandler(ctx, ev); processed {
+        ctx.hub <- &ShutdownCommand{}
+    } else {
+        switch ev.Event() {
+            case COMMAND_ACK:
+                ack := ev.(*CommandAck)
+                if ack.reply == INIT_STOPPOD {
+                    glog.Info("POD stopped ", string(ack.msg))
+                    detatchDevice(ctx)
+                } else {
+                    glog.Warning("[Transiting] wrong reply to ", string(ack.reply), string(ack.msg))
+                }
         }
     }
 }
