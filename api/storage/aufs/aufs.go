@@ -178,6 +178,10 @@ func aufsMount(ro []string, rw, target, mountLabel string) (err error) {
 	return
 }
 
+func Unmount(mountPoint string) error {
+	return aufsUnmount(mountPoint)
+}
+
 // FormatMountLabel returns a string to be used by the mount command.
 // The format of this string will be used to alter the labeling of the mountpoint.
 // The string returned is suitable to be used as the options field of the mount command.

@@ -3,6 +3,7 @@ package qemu
 import (
     "net"
     "dvm/api/pod"
+    "os"
 )
 
 type QemuEvent interface {
@@ -61,11 +62,19 @@ type ContainerCreatedEvent struct {
     Envs    map[string]string
 }
 
+type ContainerUnmounted struct {
+    Index   int
+}
+
 type VolumeReadyEvent struct {
     Name        string      //volumen name in spec
     Filepath    string      //block dev absolute path, or dir path relative to share dir
     Fstype      string      //"xfs", "ext4" etc. for block dev, or "dir" for dir path
     Format      string      //"raw" (or "qcow2") for volume, no meaning for dir path
+}
+
+type VolumeUnmounted struct {
+    Name        string
 }
 
 type BlockdevInsertedEvent struct {
@@ -77,11 +86,15 @@ type BlockdevInsertedEvent struct {
 type InterfaceCreated struct {
     Index       int
     PCIAddr     int
-    Fd          uint64
+    Fd          *os.File
     DeviceName  string
     IpAddr      string
     NetMask     string
     RouteTable  []*RouteRule
+}
+
+type InterfaceReleased struct {
+    Index       int
 }
 
 type RouteRule struct {
@@ -133,3 +146,6 @@ func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
 func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
 func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }
 func (qe* Interrupted)              Event() int { return ERROR_INTERRUPTED }
+func (qe* InterfaceReleased)        Event() int { return EVENT_INTERFACE_DELETE }
+func (qe* VolumeUnmounted)          Event() int { return EVENT_VOLUME_DELETE }
+func (qe* ContainerUnmounted)       Event() int { return EVENT_CONTAINER_DELETE }
