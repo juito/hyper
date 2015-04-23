@@ -68,6 +68,7 @@ type ContainerCreatedEvent struct {
 
 type ContainerUnmounted struct {
     Index   int
+    Success bool
 }
 
 type VolumeReadyEvent struct {
@@ -79,6 +80,7 @@ type VolumeReadyEvent struct {
 
 type VolumeUnmounted struct {
     Name        string
+    Success     bool
 }
 
 type BlockdevInsertedEvent struct {
@@ -100,6 +102,7 @@ type InterfaceCreated struct {
 
 type InterfaceReleased struct {
     Index       int
+    Success     bool
 }
 
 type RouteRule struct {

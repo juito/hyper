@@ -415,7 +415,7 @@ func (ctx *QemuContext) releaseVolumeDir() {
         if vol.info.fstype == "dir" {
             glog.V(1).Info("need umount dir ", vol.info.filename)
             ctx.progress.deleting.volumes[name] = true
-            go UmountVolume(ctx.shareDir, vol.info.filename, &VolumeUnmounted{ Name: name, }, ctx.hub)
+            go UmountVolume(ctx.shareDir, vol.info.filename, name, ctx.hub)
         }
     }
 }
@@ -425,7 +425,7 @@ func (ctx *QemuContext) releaseAufsDir() {
         if container.Fstype == "dir" {
             glog.V(1).Info("need unmount aufs", container.Image)
             ctx.progress.deleting.containers[idx] = true
-            go UmountAufsContainer(ctx.shareDir, container.Image, &ContainerUnmounted{ Index: idx, }, ctx.hub)
+            go UmountAufsContainer(ctx.shareDir, container.Image, idx, ctx.hub)
         }
     }
 }
@@ -434,7 +434,7 @@ func (ctx *QemuContext) removeVolumeDrive() {
     for name,vol := range ctx.devices.volumeMap {
         if vol.info.format == "raw" || vol.info.format == "qcow2" {
             glog.V(1).Infof("need detach volume %s (%s) ", name, vol.info.deviceName)
-            ctx.qmp <- newDiskDelSession(ctx, vol.info.scsiId, &VolumeUnmounted{ Name: name, })
+            ctx.qmp <- newDiskDelSession(ctx, vol.info.scsiId, &VolumeUnmounted{ Name: name, Success:true,})
             ctx.progress.deleting.volumes[name] = true
         }
     }
@@ -445,7 +445,7 @@ func (ctx *QemuContext) removeImageDrive() {
         if image.info.fstype != "dir" {
             glog.V(1).Infof("need eject no.%d image block device: %s", image.pos, image.info.deviceName)
             ctx.progress.deleting.containers[image.pos] = true
-            ctx.qmp <- newDiskDelSession(ctx, image.info.scsiId, &ContainerUnmounted{ Index: image.pos, })
+            ctx.qmp <- newDiskDelSession(ctx, image.info.scsiId, &ContainerUnmounted{ Index: image.pos, Success:true})
         }
     }
 }

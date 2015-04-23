@@ -260,20 +260,24 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
 	return containerId, nil
 }
 
-func UmountAufsContainer(shareDir, image string, callback QemuEvent, hub chan QemuEvent) {
+func UmountAufsContainer(shareDir, image string, index int, hub chan QemuEvent) {
 	mount := path.Join(shareDir, image)
+	success := true
 	err := aufs.Unmount(mount)
 	if err != nil {
 		glog.Warningf("Cannot umount aufs %s: %s", mount, err.Error())
+		success = false
 	}
-	hub <- callback
+	hub <- &ContainerUnmounted{Index: index, Success: success}
 }
 
-func UmountVolume(shareDir, volPath string, callback QemuEvent, hub chan QemuEvent) {
+func UmountVolume(shareDir, volPath string, name string, hub chan QemuEvent) {
 	mount := path.Join(shareDir, volPath)
+	success := true
 	err := syscall.Unmount(mount, 0)
 	if err != nil {
 		glog.Warningf("Cannot umount volume %s: %s", mount, err.Error())
+		success = false
 	}
-	hub <- callback
+	hub <-  &VolumeUnmounted{ Name: name, Success:success,}
 }

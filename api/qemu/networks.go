@@ -22,11 +22,13 @@ func CreateInterface(index int, pciAddr int, name string, isDefault bool, callba
 }
 
 func ReleaseInterface(index int, ipAddr string, file *os.File, callback chan QemuEvent) {
+    success := true
     err := network.Release(ipAddr, file)
     if err != nil {
         glog.Warning("Unable to release network interface, address: ", ipAddr)
+        success = false
     }
-    callback <- &InterfaceReleased{ Index: index, }
+    callback <- &InterfaceReleased{ Index: index, Success:success,}
 }
 
 func interfaceGot(index int, pciAddr int, name string, isDefault bool, callback chan QemuEvent, inf *network.Settings) {

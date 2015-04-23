@@ -47,6 +47,8 @@ func removeDevice(ctx *QemuContext) {
 
 func detatchDevice(ctx *QemuContext) {
 
+    ctx.releaseVolumeDir()
+    ctx.releaseAufsDir()
     ctx.removeVolumeDrive()
     ctx.removeImageDrive()
 
@@ -127,8 +129,8 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
             }
         })
     case COMMAND_SHUTDOWN:
-//        detatchDevice(ctx)
         ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
+        ctx.transition = nil
         ctx.timer = time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
                 ctx.hub <- &QemuTimeout{}
@@ -186,21 +188,48 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
     switch ev.Event() {
         case EVENT_CONTAINER_DELETE:
             c := ev.(*ContainerUnmounted)
-            if _,ok := ctx.progress.deleting.containers[c.Index]; ok {
-                glog.V(1).Infof("container %d umounted", c.Index)
-                delete(ctx.progress.deleting.containers, c.Index)
+            if !c.Success && ctx.transition != nil {
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_INIT_FAIL,
+                    Cause: "unplug previous container failed",
+                }
+                ctx.hub <- &ShutdownCommand{}
+            } else {
+                if _,ok := ctx.progress.deleting.containers[c.Index]; ok {
+                    glog.V(1).Infof("container %d umounted", c.Index)
+                    delete(ctx.progress.deleting.containers, c.Index)
+                }
             }
         case EVENT_INTERFACE_DELETE:
             nic := ev.(*InterfaceReleased)
-            if _,ok := ctx.progress.deleting.networks[nic.Index]; ok {
-                glog.V(1).Infof("interface %d released", nic.Index)
-                delete(ctx.progress.deleting.networks, nic.Index)
+            if !nic.Success && ctx.transition != nil {
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_INIT_FAIL,
+                    Cause: "unplug previous container failed",
+                }
+                ctx.hub <- &ShutdownCommand{}
+            } else {
+                if _,ok := ctx.progress.deleting.networks[nic.Index]; ok {
+                    glog.V(1).Infof("interface %d released", nic.Index)
+                    delete(ctx.progress.deleting.networks, nic.Index)
+                }
             }
         case EVENT_VOLUME_DELETE:
             v := ev.(*VolumeUnmounted)
-            if _,ok := ctx.progress.deleting.volumes[v.Name]; ok {
-                glog.V(1).Infof("volume %s umounted", v.Name)
-                delete(ctx.progress.deleting.volumes, v.Name)
+            if !v.Success && ctx.transition != nil {
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_INIT_FAIL,
+                    Cause: "unplug previous container failed",
+                }
+                ctx.hub <- &ShutdownCommand{}
+            } else {
+                if _, ok := ctx.progress.deleting.volumes[v.Name]; ok {
+                    glog.V(1).Infof("volume %s umounted", v.Name)
+                    delete(ctx.progress.deleting.volumes, v.Name)
+                }
             }
         case EVENT_SERIAL_DELETE:
             s := ev.(*SerialDelEvent)
