@@ -88,9 +88,9 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 				glog.Info("The output program is stopped!")
 		case command := <-input:
 				glog.Infof("find a command, %s", command)
-				ttyIO.Input <- command
-				if command == "hello" {
-					break
+				ttyIO.Input <- command+"\015\012"
+				if command == "exit" {
+					return nil
 				}
 		}
 	}
