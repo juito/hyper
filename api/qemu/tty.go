@@ -116,7 +116,7 @@ func ttyController(tc *ttyContext) {
         if ok {
             switch msg.(type) {
                 case string:
-                    glog.V(2).Info(tc.socketName, " Write msg to tty ", msg.(string))
+                    glog.V(2).Infof("%s Write msg to tty %q", tc.socketName, msg.(string))
                     _,err := tc.vmConn.Write([]byte(msg.(string)))
                     if err != nil {
                         glog.Error(tc.socketName, " tty write failed: ", err.Error())
