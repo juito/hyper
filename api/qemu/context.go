@@ -496,7 +496,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"console=ttyS0 panic=1\"",
         "-qmp", "unix:" + ctx.qmpSockName, "-serial", "unix:" + ctx.consoleSockName,
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
-        "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
+        "-chardev", "socket,id=charch0,telnet,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
         "-fsdev", "local,id=virtio9p,path=" + ctx.shareDir + ",security_model=none",
         "-device", "virtio-9p-pci,fsdev=virtio9p,mount_tag=" + ShareDir,
