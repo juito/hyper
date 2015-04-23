@@ -20,3 +20,6 @@
 ### DVM client side
 * ./dvmcli info
 * ./dvmcli create tomcat:latest (This command will create a new container of "tomcat:latest")
+* ./dvmcli list [pod|vm|container] (currently, the 'container' will be supported later)
+* ./dvmcli pod test.pod (create a new POD) 
+* ./dvmcli stop $POD_ID (stop a POD)
