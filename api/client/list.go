@@ -60,22 +60,27 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 
 	var (
 		tempPod pod.UserPod
-		podVm   = make(map[string]string, len(vmResponse))
 	)
-	fmt.Printf("Item is %s\n", item)
-	for _, vm := range vmResponse {
-		podVm[vm[strings.Index(vm, "-")+1:]] = vm[:strings.Index(vm, "-")]
-	}
 
-	if item == "pod" {
-		fmt.Printf("POD name                   VM name\n")
-		for _, pod := range podResponse {
-			if err := json.Unmarshal([]byte(pod), &tempPod); err != nil {
-				return err
-			}
-			fmt.Printf("%s                         %s\n", tempPod.Name, podVm[tempPod.Name])
+	fmt.Printf("Item is %s\n", item)
+	if item == "vm" {
+		fmt.Printf("     VM name\n")
+		for _, vm := range vmResponse {
+			vmid  := vm[:strings.Index(vm, "-")]
+			fmt.Printf("%15s\n", vmid)
 		}
 	}
 
+	if item == "pod" {
+		fmt.Printf("     POD ID              POD Name                   VM name\n")
+		for i, vm := range vmResponse {
+			podid := vm[strings.Index(vm, "-")+1:]
+			vmid  := vm[:strings.Index(vm, "-")]
+			if err := json.Unmarshal([]byte(podResponse[i]), &tempPod); err != nil {
+				return err
+			}
+			fmt.Printf("%15s%25s%20s\n", podid, tempPod.Name, vmid)
+		}
+	}
 	return nil
 }

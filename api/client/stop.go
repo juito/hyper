@@ -11,10 +11,10 @@ func (cli *DvmClient) DvmCmdStop(args ...string) error {
 	if len(args) == 0 {
 		return fmt.Errorf("Can not accept the 'stop' command without pod name!")
 	}
-	podName := args[0]
+	podID := args[0]
 
 	v := url.Values{}
-	v.Set("podName", podName)
+	v.Set("podName", podID)
 	body, _, err := readBody(cli.call("GET", "/stop?"+v.Encode(), nil, nil));
 	if err != nil {
 		return err
@@ -30,13 +30,13 @@ func (cli *DvmClient) DvmCmdStop(args ...string) error {
 		return err
 	}
 	out.Close()
-	// This 'ID' stands for pod name
+	// This 'ID' stands for pod ID
 	// This 'Code' should be E_SHUTDOWN
 	// THis 'Cause' ..
 	if remoteInfo.Exists("ID") {
 		// TODO ...
 	}
 
-	fmt.Printf("Success to shutdown the POD: %s!\n", podName)
+	fmt.Printf("Success to shutdown the POD: %s!\n", podID)
 	return nil
 }

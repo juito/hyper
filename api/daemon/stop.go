@@ -12,11 +12,11 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 	if len(job.Args) == 0 {
 		return fmt.Errorf("Can not execute 'stop' command without any pod name!")
 	}
-	podName := job.Args[0]
+	podID := job.Args[0]
 
-	glog.V(1).Infof("Prepare to stop the POD: %s", podName)
+	glog.V(1).Infof("Prepare to stop the POD: %s", podID)
 	// We need find the vm id which running POD, and stop it
-	vmid, err := daemon.GetPodVmByName(podName)
+	vmid, err := daemon.GetPodVmByName(podID)
 	if err != nil {
 		return err
 	}
@@ -39,7 +39,7 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 
 	// Prepare the qemu status to client
 	v := &engine.Env{}
-	v.Set("ID", podName)
+	v.Set("ID", podID)
 	v.SetInt("Code", qemuResponse.Code)
 	v.Set("Cause", qemuResponse.Cause)
 	if _, err := v.WriteTo(job.Stdout); err != nil {
