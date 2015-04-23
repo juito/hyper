@@ -79,19 +79,25 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 			command := string(data)
 			glog.V(1).Infof("command from client : %s!", command)
 			input <- command
+			if command == "exit" {
+				break
+			}
 		}
 	} ()
 
 	for {
 		select {
 		case <-stop:
-				glog.Info("The output program is stopped!")
+			glog.Info("The output program is stopped!")
 		case command := <-input:
-				glog.Infof("find a command, %s", command)
-				ttyIO.Input <- command+"\015\012"
+			glog.Infof("find a command, %s", command)
+			if command != "" {
 				if command == "exit" {
 					return nil
+				} else {
+					ttyIO.Input <- command+"\015\012"
 				}
+			}
 		}
 	}
 	return nil
