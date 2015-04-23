@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"io"
 	"bufio"
+	"strings"
 	"dvm/engine"
 	"dvm/lib/glog"
+	"dvm/api/qemu"
 )
 
 func (daemon *Daemon) CmdExec(job *engine.Job) error {
@@ -24,13 +26,34 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 	if err != nil {
 		return err
 	}
-	fmt.Printf("%s\n", vmid)
 	var (
 		stop = make(chan bool, 1)
 		input = make(chan string, 1)
 		cStdout io.Writer
 		cStdin  io.ReadCloser
+		ttyIO *qemu.TtyIO
+		ttyIOChan = make(chan *qemu.TtyIO, 1)
 	)
+	defer close(stop)
+	defer close(input)
+	defer close(ttyIOChan)
+	var attachCommand = &qemu.AttachCommand {
+		Container: "",
+		Callback: ttyIOChan,
+	}
+	qemuEvent, _, err := daemon.GetQemuChan(string(vmid))
+	if err != nil {
+		return err
+	}
+	qemuEvent.(chan qemu.QemuEvent) <-attachCommand
+	ttyIO = <-ttyIOChan
+
+	execCommand := &qemu.ExecCommand {
+		Command: strings.Split(command, " "),
+		Container: "",
+	}
+	qemuEvent.(chan qemu.QemuEvent) <-execCommand
+
 	r, w := io.Pipe()
 	go func() {
 		defer w.Close()
@@ -40,11 +63,11 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 	cStdin = r
 	cStdout = job.Stdout
 	go func() {
-		for i:=0; i< 10; i ++ {
-			glog.V(1).Infof("i: %d!", i)
-			fmt.Fprintf(cStdout, "i : %d\n", i)
+		for {
+			output := <-ttyIO.Output
+			glog.V(1).Infof("%s", output)
+			fmt.Fprintf(cStdout, "%s\n", output)
 		}
-		glog.V(1).Info("Send stop signal to main process!")
 		stop <- true
 	} ()
 
@@ -65,8 +88,9 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 				glog.Info("The output program is stopped!")
 		case command := <-input:
 				glog.Infof("find a command, %s", command)
+				ttyIO.Input <- command
 				if command == "hello" {
-					return nil
+					break
 				}
 		}
 	}
