@@ -40,13 +40,13 @@ type ExecCommand struct {
 type ShutdownCommand struct {}
 
 type AttachCommand struct {
-    container string
-    callback  chan *TtyIO
+    Container string
+    Callback  chan *TtyIO
 }
 
 type DetachCommand struct{
-    container string
-    tty       *TtyIO
+    Container string
+    Tty       *TtyIO
 }
 
 type CommandAck struct {

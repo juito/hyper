@@ -340,23 +340,23 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if cmd.container == "" { //console
+                if cmd.Container == "" { //console
                     glog.V(1).Info("Allocating vm console tty.")
-                    cmd.callback <- ctx.consoleTty.Get()
-                } else if idx := ctx.Lookup( cmd.container ); idx >= 0 {
-                    glog.V(1).Info("Allocating tty for ", cmd.container)
+                    cmd.Callback <- ctx.consoleTty.Get()
+                } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
+                    glog.V(1).Info("Allocating tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    cmd.callback <- tc.Get()
+                    cmd.Callback <- tc.Get()
                 }
             case COMMAND_DETACH:
                 cmd := ev.(*DetachCommand)
-                if cmd.container == "" {
+                if cmd.Container == "" {
                     glog.V(1).Info("Drop vm console tty.")
-                    ctx.consoleTty.Drop(cmd.tty)
-                } else if idx := ctx.Lookup( cmd.container ); idx >= 0 {
-                    glog.V(1).Info("Drop tty for ", cmd.container)
+                    ctx.consoleTty.Drop(cmd.Tty)
+                } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
+                    glog.V(1).Info("Drop tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    tc.Drop(cmd.tty)
+                    tc.Drop(cmd.Tty)
                 }
             default:
                 glog.Warning("got event during pod running")
