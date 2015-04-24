@@ -27,6 +27,9 @@ func (cli *DvmClient) DvmCmdInfo(args ...string) error {
 	if remoteInfo.Exists("Containers") {
 		fmt.Printf("Containers: %d\n", remoteInfo.GetInt("Containers"))
 	}
+	fmt.Printf("PODs: %d\n", remoteInfo.GetInt("Pods"))
+	memTotal := remoteInfo.GetInt("MemTotal")
+	fmt.Printf("Total Memory: %d KB\n", memTotal)
 
 	return nil
 }

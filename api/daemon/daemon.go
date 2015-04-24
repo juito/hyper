@@ -12,6 +12,7 @@ import (
 	"dvm/lib/glog"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
 type Daemon struct {
@@ -117,6 +118,15 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	})
 
 	return daemon, nil
+}
+
+func (daemon *Daemon) GetPodNum() int64 {
+	iter := (daemon.db).NewIterator(util.BytesPrefix([]byte("pod-vm-")), nil)
+	var i int64 = 0
+	for iter.Next() {
+		i = i + 1
+	}
+	return i
 }
 
 func (daemon *Daemon) WritePodToDB(podName string, podData []byte) error {

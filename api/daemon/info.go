@@ -4,8 +4,8 @@ import (
 	"os"
 	"fmt"
 
-	"dvm/dvmversion"
 	"dvm/engine"
+	"dvm/lib/sysinfo"
 )
 
 func (daemon *Daemon) CmdInfo(job *engine.Job) error {
@@ -26,17 +26,11 @@ func (daemon *Daemon) CmdInfo(job *engine.Job) error {
 	if remoteInfo.Exists("Containers") {
 		v.SetInt("Containers", remoteInfo.GetInt("Containers"))
 	}
-	v.SetInt("Images", 20)
-	v.Set("Driver", "test-1")
-	v.SetBool("Debug", true)
-	v.SetInt("NFd", 0)
-	v.SetInt("NGoroutines", 0)
-	v.Set("SystemTime", "2015-04-03")
-	v.Set("KernelVersion", "3.18")
-	v.Set("OperatingSystem", "Linux")
-	v.Set("InitSha1", dvmversion.INITSHA1)
-	v.SetInt("NCPU", 2)
-	v.SetInt64("MemTotal", 1024)
+
+	// Get system infomation
+	meminfo, err := sysinfo.GetMemInfo()
+	v.SetInt64("MemTotal", int64(meminfo.MemTotal))
+	v.SetInt64("Pods", daemon.GetPodNum())
 	if hostname, err := os.Hostname(); err == nil {
 		v.SetJson("Name", hostname)
 	}
