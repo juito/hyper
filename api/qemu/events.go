@@ -62,7 +62,7 @@ type ContainerCreatedEvent struct {
     // which described the mounted aufs or overlayfs dir.
     Fstype  string
     Workdir string
-    EntryPoint []string
+    Entrypoint []string
     Cmd     []string
     Envs    map[string]string
 }

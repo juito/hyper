@@ -39,6 +39,7 @@ type VmContainer struct {
     Fsmap   []VmFsmapDescriptor `json:"fsmap,omitempty"`
     Tty     string `json:"tty"`
     Workdir string `json:"workdir"`
+    Entrypoint []string `json:"-"`
     Cmd     []string `json:"cmd"`
     Envs    []VmEnvironmentVar `json:"envs,omitempty"`
     RestartPolicy   string `json:"restartPolicy"`

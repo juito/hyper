@@ -256,9 +256,19 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
     c.Id     = info.Id
     c.Rootfs = info.Rootfs
     c.Fstype = info.Fstype
-    if len(c.Cmd) == 0 {
-        c.Cmd    = info.Cmd
+
+    cmd := c.Entrypoint
+    if len(c.Entrypoint) == 0 && len(info.Entrypoint) > 0 {
+        cmd = info.Entrypoint
     }
+    if len(c.Cmd) > 0 {
+        cmd = append(cmd, c.Cmd...)
+    } else if len(info.Cmd) > 0 {
+        cmd = append(cmd, info.Cmd...)
+    }
+    c.Cmd = cmd
+    c.Entrypoint = []string{}
+
     if c.Workdir == "" {
         c.Workdir = info.Workdir
     }
@@ -571,7 +581,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         containers[i] = VmContainer{
             Id:      "",   Rootfs: "rootfs", Fstype: "ext4", Image:  "",
             Volumes: vols,  Fsmap:   fsmap,   Tty:     "",
-            Workdir: container.Workdir,   Cmd:     container.Command,     Envs:    envs,
+            Workdir: container.Workdir,  Entrypoint: container.Entrypoint, Cmd:     container.Command,     Envs:    envs,
             RestartPolicy: restart,
         }
 

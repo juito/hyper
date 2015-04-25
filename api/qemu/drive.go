@@ -185,6 +185,7 @@ func CreateContainer(userPod *pod.UserPod, sharedDir string, hub chan QemuEvent)
                 Image: devFullName,
                 Fstype: fstype,
                 Workdir: jsonResponse.Config.WorkingDir,
+				Entrypoint: jsonResponse.Config.Entrypoint,
                 Cmd: jsonResponse.Config.Cmd,
                 Envs: env,
             }

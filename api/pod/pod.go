@@ -39,7 +39,7 @@ type UserContainer struct {
     Image              string                  `json:"image"`
     Command            []string                `json:"command"`
     Workdir            string                  `json:"workdir"`
-    EntryPoint         []string                `json:"entryPoint"`
+    Entrypoint         []string                `json:"entrypoint"`
     Ports              []UserContainerPort     `json:"ports"`
     Envs               []UserEnvironmentVar    `json:"envs"`
     Volumes            []UserVolumeReference   `json:"volumes"`
