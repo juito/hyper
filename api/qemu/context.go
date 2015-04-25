@@ -256,8 +256,12 @@ func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
     c.Id     = info.Id
     c.Rootfs = info.Rootfs
     c.Fstype = info.Fstype
-    c.Cmd    = info.Cmd
-    c.Workdir = info.Workdir
+    if len(c.Cmd) == 0 {
+        c.Cmd    = info.Cmd
+    }
+    if c.Workdir == "" {
+        c.Workdir = info.Workdir
+    }
     for _,e := range c.Envs {
         if _,ok := info.Envs[e.Env]; ok {
             delete(info.Envs, e.Env)
@@ -567,7 +571,7 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         containers[i] = VmContainer{
             Id:      "",   Rootfs: "rootfs", Fstype: "ext4", Image:  "",
             Volumes: vols,  Fsmap:   fsmap,   Tty:     "",
-            Workdir: "",   Cmd:     nil,     Envs:    envs,
+            Workdir: container.Workdir,   Cmd:     container.Command,     Envs:    envs,
             RestartPolicy: restart,
         }
 
