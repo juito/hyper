@@ -30,6 +30,7 @@ func (cli *DvmClient) DvmCmdInfo(args ...string) error {
 	fmt.Printf("PODs: %d\n", remoteInfo.GetInt("Pods"))
 	memTotal := remoteInfo.GetInt("MemTotal")
 	fmt.Printf("Total Memory: %d KB\n", memTotal)
+	fmt.Printf("Operating System: %s\n", remoteInfo.Get("Operating System"))
 
 	return nil
 }

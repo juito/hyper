@@ -75,10 +75,26 @@ type MemInfo struct {
 	DirectMap1G            uint64
 }
 
+type OSInfo struct {
+	Name                   string
+	Version                string
+	Id                     string
+	IdLike                 string
+	PrettyName             string
+	VersionId              string
+	HomeURL                string
+	SupportURL             string
+	BugURL                 string
+}
+
 func GetCpuInfo() (*CpuInfo, error) {
 	return getCpuInfo()
 }
 
 func GetMemInfo() (*MemInfo, error) {
 	return getMemInfo()
+}
+
+func GetOSInfo() (*OSInfo, error) {
+	return getOSInfo()
 }

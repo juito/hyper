@@ -29,8 +29,10 @@ func (daemon *Daemon) CmdInfo(job *engine.Job) error {
 
 	// Get system infomation
 	meminfo, err := sysinfo.GetMemInfo()
+	osinfo, err := sysinfo.GetOSInfo()
 	v.SetInt64("MemTotal", int64(meminfo.MemTotal))
 	v.SetInt64("Pods", daemon.GetPodNum())
+	v.Set("Operating System", osinfo.PrettyName)
 	if hostname, err := os.Hostname(); err == nil {
 		v.SetJson("Name", hostname)
 	}
