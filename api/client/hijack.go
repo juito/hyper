@@ -3,17 +3,14 @@ package client
 import (
 	"fmt"
 	"io"
-	"os"
-	"os/signal"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"strings"
 	"time"
-	"bytes"
 
 	"dvm/api"
-	"dvm/lib/term"
+	"dvm/lib/terminal"
 	"dvm/lib/promise"
 	"dvm/dvmversion"
 )
@@ -80,25 +77,16 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	var (
 		receiveStdout chan error
-		oldState *term.State
-		stop = 0
+		term *terminal.Terminal
 	)
 
-	sigChan := make(chan os.Signal, 1)
-	signal.Notify(sigChan, os.Interrupt)
-	go func() {
-		<-sigChan
-		stop = 1
-		io.Copy(rwc, bytes.NewReader([]byte("exit")))
-		os.Exit(0)
-	}()
-
 	if in != nil && setRawTerminal {
-		oldState, err = term.SetRawTerminal(cli.inFd)
+		term, err = terminal.NewWithStdInOut()
 		if err != nil {
 			return err
 		}
-		defer term.RestoreTerminal(cli.inFd, oldState)
+		defer term.ReleaseFromStdInOut()
+		term.SetPrompt("root@helloworld: # ")
 	}
 
 	if stdout != nil || stderr != nil {
@@ -106,12 +94,19 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			defer func() {
 				if in != nil {
 					if setRawTerminal {
-						term.RestoreTerminal(cli.inFd, oldState)
+						term.ReleaseFromStdInOut()
 					}
 				}
 			}()
 
-			_, err = io.Copy(stdout, br)
+			for {
+				line := make([]byte, 1024)
+				_, _ = br.Read(line)
+				term.Write(line)
+				if strings.Contains(string(line), "exit") {
+					break
+				}
+			}
 			fmt.Printf("[hijack] End of stdout\n")
 			return err
 		})
@@ -119,7 +114,21 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	sendStdin := promise.Go(func() error {
 		if in != nil {
-			io.Copy(rwc, in)
+			line , err := term.ReadLine()
+			for {
+				if err == io.EOF {
+					term.Write([]byte(line))
+					fmt.Println()
+					break
+				}
+				if (err != nil && strings.Contains(err.Error(), "control-c break")) || len(line) == 0{
+					line, err = term.ReadLine()
+				} else {
+					term.Write([]byte(line+"\r\n"))
+					line, err = term.ReadLine()
+				}
+			}
+			io.Copy(rwc, strings.NewReader(line))
 			fmt.Printf("[hijack] End of stdin\n")
 		}
 
@@ -140,12 +149,12 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			return err
 		}
 	}
-
-	if !cli.isTerminalIn {
-		if err := <-sendStdin; err != nil {
+	if in != nil {
+		if err := <-sendStdin ; err != nil {
 			fmt.Printf("Error sendStdin: %s\n", err.Error())
 			return err
 		}
 	}
+
 	return nil
 }

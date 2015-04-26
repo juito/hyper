@@ -37,7 +37,7 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	}()
 
 	errCh = promise.Go(func() error {
-		return cli.hijack("POST", "/exec?"+v.Encode(), false, cli.in, cli.out, cli.out, hijacked, nil)
+		return cli.hijack("POST", "/exec?"+v.Encode(), true, cli.in, cli.out, cli.out, hijacked, nil)
 	})
 
 	// Acknowledge the hijack before starting

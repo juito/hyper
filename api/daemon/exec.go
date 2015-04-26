@@ -77,6 +77,9 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 			reader := bufio.NewReader(cStdin)
 			data, _, _ := reader.ReadLine()
 			command := string(data)
+			if command == "" {
+				continue
+			}
 			glog.V(1).Infof("command from client : %s!", command)
 			input <- command
 			if command == "exit" {

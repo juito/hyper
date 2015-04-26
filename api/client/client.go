@@ -12,8 +12,6 @@ import (
 	"strings"
 	"text/template"
 	"time"
-
-	"dvm/lib/term"
 )
 
 type DvmClient struct {
@@ -23,10 +21,6 @@ type DvmClient struct {
 	in         io.ReadCloser
 	out        io.Writer
 	err        io.Writer
-	inFd       uintptr
-	outFd      uintptr
-	isTerminalIn  bool     // By default, we use TTY
-	isTerminalOut bool     // By default, we use TTY
 	tlsConfig	*tls.Config
 	transport     *http.Transport
 }
@@ -76,14 +70,7 @@ func (cli *DvmClient) Cmd(args ...string) error {
 func NewDvmClient(proto, addr string, tlsConfig *tls.Config) *DvmClient {
 	var (
 		scheme        = "http"
-		inFd          uintptr
-		outFd         uintptr
-		isTerminalIn  = false
-		isTerminalOut = false
 	)
-
-	inFd, isTerminalIn = term.GetFdInfo(os.Stdin)
-	outFd, isTerminalOut = term.GetFdInfo(os.Stdout)
 
 	if tlsConfig != nil {
 		scheme = "https"
@@ -113,10 +100,6 @@ func NewDvmClient(proto, addr string, tlsConfig *tls.Config) *DvmClient {
 		in:            os.Stdin,
 		out:           os.Stdout,
 		err:           os.Stdout,
-		inFd:          inFd,
-		outFd:         outFd,
-		isTerminalIn:  isTerminalIn,
-		isTerminalOut: isTerminalOut,
 		scheme:        scheme,
 		transport:     tran,
 	}
