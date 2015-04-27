@@ -3,6 +3,8 @@ package client
 import (
 	"fmt"
 	"net/url"
+	"strings"
+
 	"dvm/engine"
 )
 
@@ -17,6 +19,9 @@ func (cli *DvmClient) DvmCmdStop(args ...string) error {
 	v.Set("podName", podID)
 	body, _, err := readBody(cli.call("GET", "/stop?"+v.Encode(), nil, nil));
 	if err != nil {
+		if strings.Contains(err.Error(), "leveldb: not found") {
+			return fmt.Errorf("Can not find that POD ID to stop, please check your POD ID!")
+		}
 		return err
 	}
 	out := engine.NewOutput()
