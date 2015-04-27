@@ -372,6 +372,8 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Allocating vm console tty.")
                     cmd.Callback <- ctx.consoleTty.Get()
+//                    tc := ctx.devices.ttyMap[0]
+//                    cmd.Callback <- tc.Get()
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Allocating tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
