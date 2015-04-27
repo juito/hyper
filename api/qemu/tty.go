@@ -8,6 +8,7 @@ import (
     "strconv"
     "os"
     "time"
+    "github.com/kr/pty"
 )
 
 type TtyIO struct {
@@ -188,4 +189,19 @@ func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index
         Index:  index,
         TC:     tc,
     }
+}
+
+func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) error {
+    pty, console, err := pty.Open()
+    if err != nil {
+        glog.Error("fail to open pty/tty: ", err.Error())
+        ctx.hub <- &InitFailedEvent{
+            reason: sockName + " init failed ",
+        }
+        return err
+    }
+
+    go io.Copy(tc.vmConn, os.Stdin)
+    go io.Copy(console, tc.vmConn)
+    go io.Copy(os.Stdout, pty)
 }
