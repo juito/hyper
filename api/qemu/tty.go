@@ -204,4 +204,6 @@ func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) err
     go io.Copy(tc.vmConn, os.Stdin)
     go io.Copy(console, tc.vmConn)
     go io.Copy(os.Stdout, pty)
+
+    return nil
 }
