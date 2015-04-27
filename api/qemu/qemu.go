@@ -28,14 +28,16 @@ func waitConsoleOutput(ctx *QemuContext) {
     var conn net.Conn
     var err  error
 
-    for i:= 0 ; i < 5 ; i++ {
+    for i:= 0 ; i < 10 ; i++ {
         time.Sleep(100*time.Millisecond)
-
         conn, err = net.Dial("unix", ctx.consoleSockName)
+        if err == nil {
+            break
+        }
     }
 
     if err != nil {
-        glog.Error("failed to connected to ", ctx.consoleSockName)
+        glog.Error("failed to connected to ", ctx.consoleSockName, " ", err.Error())
         return
     }
 
