@@ -204,6 +204,33 @@ func getList(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 	return writeJSONEnv(w, http.StatusOK, env)
 }
 
+func getPodInfo(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	job := eng.Job("podInfo", r.Form.Get("podName"))
+	stdoutBuf := bytes.NewBuffer(nil)
+
+	job.Stdout.Add(stdoutBuf)
+	if err := job.Run(); err != nil {
+		return err
+	}
+
+	var (
+		env engine.Env
+		dat map[string] interface{}
+		returnedJSONstr string
+	)
+	returnedJSONstr = engine.Tail(stdoutBuf, 1)
+	if err := json.Unmarshal([]byte(returnedJSONstr), &dat); err != nil {
+		return err
+	}
+
+	env.SetInt("Exist", int(dat["Exist"].(float64)))
+	return writeJSONEnv(w, http.StatusCreated, env)
+}
+
 func getStop(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := r.ParseForm(); err != nil {
 		return nil
@@ -419,6 +446,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 	m := map[string]map[string]HttpApiFunc{
 		"GET": {
 			"/info":                           getInfo,
+			"/pod/info":                       getPodInfo,
 			"/version":                        getVersion,
 			"/list":						   getList,
 			"/stop":                           getStop,

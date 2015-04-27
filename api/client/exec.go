@@ -5,12 +5,13 @@ import (
 	"io"
 	"net/url"
 	"strings"
+	"dvm/engine"
 	"dvm/lib/promise"
 )
 
 func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	if len(args) == 0 {
-		return fmt.Errorf("Can not accept the 'exec' command without container ID!")
+		return fmt.Errorf("Can not accept the 'exec' command without POD/Container ID!")
 	}
 	if len(args) == 1 {
 		return fmt.Errorf("Can not accept the 'exec' command without command!")
@@ -21,7 +22,18 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	fmt.Printf("The pod name is %s, command is %s\n", podName, command)
 
 	v := url.Values{}
-	v.Set("podname", podName)
+	if strings.Contains(podName, "pod-") {
+		podExist, err := cli.GetPodInfo(podName)
+		if err != nil {
+			return err
+		}
+		if !podExist {
+			return fmt.Errorf("The POD : %s does not exist, please create it before exec!", podName)
+		}
+		v.Set("podname", podName)
+	} else {
+		v.Set("container", podName)
+	}
 	v.Set("command", command)
 
 	var (
@@ -61,4 +73,35 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 	}
 	fmt.Printf("Success to exec the command %s for POD %s!\n", command, podName)
 	return nil
+}
+
+func (cli *DvmClient) GetPodInfo(podName string) (bool, error) {
+	// get the pod or container info before we start the exec
+	v := url.Values{}
+	v.Set("podName", podName)
+	body, _, err := readBody(cli.call("GET", "/pod/info?"+v.Encode(), nil, nil))
+	if err != nil {
+		fmt.Printf("The Error is encountered, %s\n", err)
+		return false, err
+	}
+
+	out := engine.NewOutput()
+	remoteInfo, err := out.AddEnv()
+	if err != nil {
+		return false, err
+	}
+
+	if _, err := out.Write(body); err != nil {
+		fmt.Printf("Error reading remote info: %s", err)
+		return false, err
+	}
+	out.Close()
+	if remoteInfo.Exists("Exist") {
+		podExist := remoteInfo.GetInt("Exist")
+		if podExist > 0 {
+			return true, nil
+		}
+	}
+
+	return false, nil
 }

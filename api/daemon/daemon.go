@@ -32,6 +32,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"create":			 daemon.CmdCreate,
 		"pull":				 daemon.CmdPull,
 		"pod":				 daemon.CmdPod,
+		"podInfo":			 daemon.CmdPodInfo,
 		"list":              daemon.CmdList,
 		"stop":              daemon.CmdStop,
 		"exec":              daemon.CmdExec,

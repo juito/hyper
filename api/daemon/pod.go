@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"fmt"
+	"strings"
+
 	"dvm/engine"
 	"dvm/api/pod"
 	"dvm/api/qemu"
@@ -57,6 +59,28 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	v.Set("ID", podid)
 	v.SetInt("Code", qemuResponse.Code)
 	v.Set("Cause", qemuResponse.Cause)
+	if _, err := v.WriteTo(job.Stdout); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) CmdPodInfo(job *engine.Job) error {
+	if len(job.Args) == 0 {
+		return fmt.Errorf("Can not get POD info withou POD ID")
+	}
+	podName := job.Args[0]
+	podExist := 0
+	// We need find the vm id which running POD
+	_, err := daemon.GetPodVmByName(podName)
+	if err != nil && strings.Contains(err.Error(), "not found") {
+		// bypass this error
+	} else {
+		podExist = 1
+	}
+	v := &engine.Env{}
+	v.SetInt("Exist", podExist)
 	if _, err := v.WriteTo(job.Stdout); err != nil {
 		return err
 	}
