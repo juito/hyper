@@ -176,7 +176,8 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         id:         id,
         cpu:        cpu,
         memory:     memory,
-        pciAddr:    0x05,
+        pciAddr:    PciAddrFrom,
+        scsiId:     0,
         kernel:     Kernel,
         initrd:     Initrd,
         hub:        hub,
@@ -220,6 +221,13 @@ func mkSureNotExist(filename string) error {
 func (pm *processingMap) isEmpty() bool {
     return len(pm.containers) == 0 && len(pm.volumes) == 0 && len(pm.blockdevs) == 0 &&
         len(pm.networks) == 0 && len(pm.ttys) == 0 && len(pm.serialPorts) == 0
+}
+
+func (ctx *QemuContext) resetAddr() {
+    ctx.lock.Lock()
+    ctx.pciAddr = PciAddrFrom
+    ctx.scsiId = 0
+    ctx.lock.Unlock()
 }
 
 func (ctx* QemuContext) nextScsiId() int {

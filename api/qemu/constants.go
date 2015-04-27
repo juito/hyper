@@ -9,6 +9,7 @@ const (
     SerialPrefix = "serial-port-"
     Kernel      = "/sources/dvminit/test/kernel"
     Initrd      = "/sources/dvminit/test/initrd-dvm.img"
+    PciAddrFrom = 0x05
 )
 
 const(
