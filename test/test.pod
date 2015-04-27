@@ -2,7 +2,9 @@
 	"id": "test-container-create-1",
 	"containers" : [{
 	    "name": "web",
-	    "image": "tomcat:latest"
+	    "image": "tomcat:latest",
+	    "envs": [{"env":"PS1","value":"||||||| DUANG |||||||"}],
+	"command":["/bin/bash"]
 	}],
 	"resource": {
 	    "vcpu": 1,
