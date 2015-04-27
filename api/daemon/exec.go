@@ -64,11 +64,14 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 	cStdout = job.Stdout
 	go func() {
 		for {
-			output := <-ttyIO.Output
-			glog.V(1).Infof("%s", output)
-			fmt.Fprintf(cStdout, "%s\n", output)
+			select {
+			case output := <-ttyIO.Output:
+				glog.V(1).Infof("%s", output)
+				fmt.Fprintf(cStdout, "%s\n", output)
+			case <-stop:
+				return
+			}
 		}
-		stop <- true
 	} ()
 
 
@@ -91,14 +94,15 @@ func (daemon *Daemon) CmdExec(job *engine.Job) error {
 	for {
 		select {
 		case <-stop:
-			glog.Info("The output program is stopped!")
+			glog.V(1).Info("The output program is stopped!")
 		case command := <-input:
 			glog.Infof("find a command, %s", command)
 			if command != "" {
 				if command == "exit" {
+					stop <- true
 					return nil
 				} else {
-					ttyIO.Input <- command+"\015\012"
+					ttyIO.Input <- command +"\015\012"
 				}
 			}
 		}

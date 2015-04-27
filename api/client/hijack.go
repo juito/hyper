@@ -101,11 +101,11 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 			for {
 				line := make([]byte, 1024)
-				_, _ = br.Read(line)
-				term.Write(line)
-				if strings.Contains(string(line), "exit") {
+				_, err := br.Read(line)
+				if err == io.EOF {
 					break
 				}
+				term.Write(line)
 			}
 			fmt.Printf("[hijack] End of stdout\n")
 			return err
@@ -124,7 +124,8 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 				if (err != nil && strings.Contains(err.Error(), "control-c break")) || len(line) == 0{
 					line, err = term.ReadLine()
 				} else {
-					term.Write([]byte(line+"\r\n"))
+					//term.Write([]byte(line+"\r\n"))
+					io.Copy(rwc, strings.NewReader(line+"\r\n"))
 					line, err = term.ReadLine()
 				}
 			}
@@ -136,6 +137,13 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			CloseWrite() error
 		}); ok {
 			if err := conn.CloseWrite(); err != nil {
+				fmt.Printf("Couldn't send EOF: %s", err.Error())
+			}
+		}
+		if conn, ok := rwc.(interface {
+			CloseRead() error
+		}); ok {
+			if err := conn.CloseRead(); err != nil {
 				fmt.Printf("Couldn't send EOF: %s", err.Error())
 			}
 		}
