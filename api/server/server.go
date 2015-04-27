@@ -251,7 +251,7 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 	}
 
 	var (
-		job = eng.Job("exec", r.Form.Get("podname"), r.Form.Get("command"))
+		job = eng.Job("exec", r.Form.Get("type"), r.Form.Get("value"), r.Form.Get("command"))
 		errOut io.Writer = os.Stderr
 		errStream io.Writer
 	)

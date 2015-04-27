@@ -30,8 +30,10 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		if !podExist {
 			return fmt.Errorf("The POD : %s does not exist, please create it before exec!", podName)
 		}
-		v.Set("podname", podName)
+		v.Set("type", "pod")
+		v.Set("value", podName)
 	} else {
+		v.Set("type", "container")
 		v.Set("container", podName)
 	}
 	v.Set("command", command)

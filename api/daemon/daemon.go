@@ -15,11 +15,20 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+type Container struct {
+	Name            string
+	PodId           string
+	Image           string
+	Cmds            []string
+	Status          string
+}
+
 type Daemon struct {
 	ID               string
 	db				 *leveldb.DB
 	eng              *engine.Engine
 	dockerCli		 *docker.DockerCli
+	containerList    map[string]*Container
 	qemuChan         map[string]interface{}
 	qemuClientChan   map[string]interface{}
 }
@@ -202,6 +211,27 @@ func (daemon *Daemon) SetQemuChan(vmid string, qemuchan, qemuclient interface{})
 		return nil
 	}
 	return fmt.Errorf("Already find a Qemu chan for vm: %s!", vmid)
+}
+
+func (daemon *Daemon) SetPodByContainer(containerId, podId, name, image string, cmds []string) error {
+	container := &Container {
+		Name:             name,
+		PodId:            podId,
+		Image:            image,
+		Cmds:             cmds,
+	}
+	daemon.containerList[containerId] = container
+
+	return nil
+}
+
+func (daemon *Daemon) GetPodByContainer(containerId string) (string, error) {
+	container := daemon.containerList[containerId]
+	if container == nil {
+		return "", fmt.Errorf("Can not find that container!")
+	}
+
+	return container.PodId, nil
 }
 
 func (daemon *Daemon) shutdown() error {
