@@ -361,9 +361,9 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
     commands[1] = &QmpCommand{
         Execute:"device_add",
         Arguments:  map[string]interface{}{
-            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"chardev":"podttys" + index,
+            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"name":ttysName,
 //            "driver":"pci-serial","chardev":"podttys" + index, "addr":addr,
-            "id":"ttys" + index,"name":ttysName,
+            "chardev":"podttys" + index,"id":"ttys" + index,
         },
     }
     return &QmpSession{
