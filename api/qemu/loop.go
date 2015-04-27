@@ -400,6 +400,7 @@ func statePodTransiting(ctx *QemuContext, ev QemuEvent) {
         if ctx.deviceReady() {
             glog.V(1).Info("device ready, could run pod.")
             prepareDevice(ctx, ctx.transition.(*ReplacePodCommand).NewSpec)
+            ctx.resetAddr()
             ctx.Become(stateInit)
         }
     } else if processed := initFailureHandler(ctx, ev); processed {
