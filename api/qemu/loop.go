@@ -79,7 +79,8 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
         }
     }
     for i:=0; i < len(ctx.userSpec.Containers); i++ {
-        go attachSerialPort(ctx, i)
+        addr := ctx.nextPciAddr()
+        go attachSerialPort(ctx, i, addr)
     }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]

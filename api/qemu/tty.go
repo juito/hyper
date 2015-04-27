@@ -157,12 +157,11 @@ func ttyController(tc *ttyContext) {
     }
 }
 
-func attachSerialPort(ctx *QemuContext, index int) {
+func attachSerialPort(ctx *QemuContext, index,addr int) {
     sockName := ctx.serialPortPrefix + strconv.Itoa(index) + ".sock"
     os.Remove(sockName)
-//    addr := ctx.nextPciAddr()
-//    ctx.qmp <- newSerialPortSession(ctx, sockName, index, addr)
-    ctx.qmp <- newSerialPortSession(ctx, sockName, index)
+    ctx.qmp <- newSerialPortSession(ctx, sockName, index, addr)
+//    ctx.qmp <- newSerialPortSession(ctx, sockName, index)
 
     for i:=0; i < 5; i++ {
         conn, err := net.Dial("unix", sockName)
@@ -182,8 +181,8 @@ func attachSerialPort(ctx *QemuContext, index int) {
 
 func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
     tc := setupTty(sockName, conn, make(chan interface{}), true)
-    tc.start()
-//    directConnectConsole(ctx, sockName, tc)
+//    tc.start()
+    directConnectConsole(ctx, sockName, tc)
 
     ctx.hub <- &TtyOpenEvent{
         Index:  index,

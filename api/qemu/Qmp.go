@@ -338,11 +338,12 @@ func newNetworkDelSession(ctx *QemuContext, device string, callback QemuEvent) *
     }
 }
 
-//func newSerialPortSession(ctx *QemuContext, sockName string, idx,addr int) *QmpSession {
-func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSession {
+func newSerialPortSession(ctx *QemuContext, sockName string, idx,addr int) *QmpSession {
+//func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSession {
     index    := strconv.Itoa(idx)
     devId    := "podttys" + index
-    ttysName := "org.getdvm.podttys." + index
+    //ttysName := "org.getdvm.podttys." + index
+    ttysName := fmt.Sprintf("/dev/ttyS%d", idx + 1)
     commands := make([]*QmpCommand, 2)
     commands[0] = &QmpCommand{
         Execute: "chardev-add",
@@ -361,8 +362,8 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
     commands[1] = &QmpCommand{
         Execute:"device_add",
         Arguments:  map[string]interface{}{
-            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"name":ttysName,
-//            "driver":"pci-serial","chardev":"podttys" + index, "addr":addr,
+//            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"name":ttysName,
+            "driver":"pci-serial", "addr":addr,
             "chardev":"podttys" + index,"id":"ttys" + index,
         },
     }
