@@ -4,9 +4,9 @@ import (
     "io"
     "net"
     "dvm/lib/glog"
+    "dvm/lib/telnet"
     "strconv"
     "os"
-    "fmt"
     "time"
 )
 
@@ -17,15 +17,26 @@ type TtyIO struct {
 
 type ttyContext struct {
     socketName  string
-    vmConn      *net.UnixConn
+    vmConn      net.Conn
     observers   []chan string
     command     chan interface{}
 }
 
-func setupTty(name string, conn *net.UnixConn, input chan interface{}) *ttyContext {
+func setupTty(name string, conn *net.UnixConn, input chan interface{}, tn bool) *ttyContext {
+    var c net.Conn = conn
+    if tn == true {
+        tc,err := telnet.NewConn(conn)
+        if err != nil {
+            glog.Error("fail to init telnet connection to ", name, ": ", err.Error())
+            return nil
+        }
+        glog.V(1).Infof("connected %s as telnet mode.", name)
+        c = tc
+    }
+
     return &ttyContext{
         socketName: name,
-        vmConn:     conn,
+        vmConn:     c,
         observers:  []chan string{},
         command:    input,
     }
@@ -100,7 +111,7 @@ func ttyReceiver(tc *ttyContext) {
 
         if buf[0] == '\n' && len(line) > 0 {
             msg := string(line[:len(line)-1])
-            glog.V(4).Info(tc.socketName, " ", msg)
+            glog.V(4).Infof("[%s] %s", tc.socketName, msg)
             tc.sendMessage(msg)
             line = []byte{}
         } else {
@@ -123,6 +134,14 @@ func ttyController(tc *ttyContext) {
                         looping = false
                         tc.vmConn.Close()
                     }
+                case byte:
+                    glog.V(2).Infof("%s Write byte msg to tty %d", tc.socketName, msg.(byte))
+                    _,err := tc.vmConn.Write([]byte{msg.(byte)})
+                    if err != nil {
+                        glog.Error(tc.socketName, " tty write byte failed: ", err.Error())
+                        looping = false
+                        tc.vmConn.Close()
+                    }
                 case error:
                     if msg.(error) == io.EOF {
                         glog.Info(tc.socketName, " tty receive close signal")
@@ -140,29 +159,30 @@ func ttyController(tc *ttyContext) {
 func attachSerialPort(ctx *QemuContext, index int) {
     sockName := ctx.serialPortPrefix + strconv.Itoa(index) + ".sock"
     os.Remove(sockName)
-    sock,err := net.ListenUnix("unix",  &net.UnixAddr{sockName, "unix"})
-    if err != nil {
-        ctx.hub <- &InitFailedEvent{
-            reason: sockName + " init failed " + err.Error(),
-        }
-        return
-    }
-    go waitingSerialPort(ctx, sockName, sock, index)
+//    addr := ctx.nextPciAddr()
+//    ctx.qmp <- newSerialPortSession(ctx, sockName, index, addr)
     ctx.qmp <- newSerialPortSession(ctx, sockName, index)
+
+    for i:=0; i < 5; i++ {
+        conn, err := net.Dial("unix", sockName)
+        if err == nil {
+            glog.V(1).Info("connected to ", sockName)
+            go connSerialPort(ctx, sockName, conn.(*net.UnixConn), index)
+            return
+        }
+        glog.Warningf("connect %s %d attempt: %s", sockName, i, err.Error())
+        time.Sleep(200 * time.Millisecond)
+    }
+
+    ctx.hub <- &InitFailedEvent{
+        reason: sockName + " init failed ",
+    }
 }
 
-func waitingSerialPort(ctx *QemuContext, sockName string, sock *net.UnixListener, index int) {
-    sock.SetDeadline(time.Now().Add(30 * time.Second))
-    conn, err := sock.AcceptUnix()
-    if err != nil {
-        glog.Error("Accept serial port failed", err.Error())
-        ctx.hub <- &InitFailedEvent{
-            reason: fmt.Sprintf("#%d serial port init failed: %s", index, err.Error()),
-        }
-        return
-    }
-    tc := setupTty(sockName, conn, make(chan interface{}))
+func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
+    tc := setupTty(sockName, conn, make(chan interface{}), true)
     tc.start()
+//    directConnectConsole(ctx, sockName, tc)
 
     ctx.hub <- &TtyOpenEvent{
         Index:  index,
