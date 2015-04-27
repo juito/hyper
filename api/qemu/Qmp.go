@@ -338,6 +338,7 @@ func newNetworkDelSession(ctx *QemuContext, device string, callback QemuEvent) *
     }
 }
 
+//func newSerialPortSession(ctx *QemuContext, sockName string, idx,addr int) *QmpSession {
 func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSession {
     index    := strconv.Itoa(idx)
     devId    := "podttys" + index
@@ -350,8 +351,9 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
             "backend" :  map[string]interface{}{
                 "type":"socket","data": map[string]interface{}{
                     "addr":  map[string]interface{}{
+//                        "type":"inet","data": map[string]interface{}{"port":"8864","host":"127.0.0.1",},
                         "type":"unix","data": map[string]interface{}{"path":sockName,},
-                    },"server":false, "telnet": true,
+                    },"server":true, "wait":false, "telnet":true,
                 },
             },
         },
@@ -360,6 +362,7 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSessio
         Execute:"device_add",
         Arguments:  map[string]interface{}{
             "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"chardev":"podttys" + index,
+//            "driver":"pci-serial","chardev":"podttys" + index, "addr":addr,
             "id":"ttys" + index,"name":ttysName,
         },
     }

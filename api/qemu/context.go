@@ -10,6 +10,7 @@ import (
     "dvm/api/types"
     "dvm/lib/glog"
     "time"
+    "fmt"
 )
 
 type QemuContext struct {
@@ -42,7 +43,6 @@ type QemuContext struct {
 
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
-    consoleSock *net.UnixListener
     consoleTty  *ttyContext
 
     handler     stateHandler
@@ -158,13 +158,6 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
     mkSureNotExist(dvmSockName)
     mkSureNotExist(consoleSockName)
 
-    consoleSock,err := net.ListenUnix("unix",  &net.UnixAddr{consoleSockName, "unix"})
-    if err != nil {
-        glog.Error("cannot create socket", consoleSockName, err.Error())
-        return nil,err
-    }
-    defer func(){ if err != nil {consoleSock.Close()}}()
-
     qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
     if err != nil {
         glog.Error("cannot create socket", qmpSockName, err.Error())
@@ -201,7 +194,6 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         process:    nil,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
-        consoleSock:consoleSock,
         consoleTty: nil,
         handler:    stateInit,
         userSpec:   nil,
@@ -508,12 +500,12 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-rtc", "base=utc,driftfix=slew", "-no-reboot", "-display", "none", "-boot", "strict=on",
         "-m", strconv.Itoa(ctx.memory), "-smp", strconv.Itoa(ctx.cpu),
         "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"console=ttyS0 panic=1\"",
-        "-qmp", "unix:" + ctx.qmpSockName, "-serial", "unix:" + ctx.consoleSockName,
+        "-qmp", "unix:" + ctx.qmpSockName, "-serial", fmt.Sprintf("unix:%s,server,nowait", ctx.consoleSockName),
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
         "-chardev", "socket,id=charch0,telnet,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
-        "-fsdev", "local,id=virtio9p,path=" + ctx.shareDir + ",security_model=none",
-        "-device", "virtio-9p-pci,fsdev=virtio9p,mount_tag=" + ShareDir,
+        "-fsdev", fmt.Sprintf("local,id=virtio9p,path=%s,security_model=none", ctx.shareDir),
+        "-device", fmt.Sprintf("virtio-9p-pci,fsdev=virtio9p,mount_tag=%s", ShareDir),
     )
 }
 

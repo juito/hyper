@@ -6,6 +6,7 @@ import (
     "os/exec"
     "strings"
     "time"
+    "net"
 )
 
 func printDebugOutput(tag string, out io.ReadCloser) {
@@ -23,17 +24,28 @@ func printDebugOutput(tag string, out io.ReadCloser) {
 }
 
 func waitConsoleOutput(ctx *QemuContext) {
-    ctx.consoleSock.SetDeadline(time.Now().Add(30 * time.Second))
-    conn, err := ctx.consoleSock.AcceptUnix()
+
+    var conn net.Conn
+    var err  error
+
+    for i:= 0 ; i < 5 ; i++ {
+        time.Sleep(100*time.Millisecond)
+
+        conn, err = net.Dial("unix", ctx.consoleSockName)
+    }
+
     if err != nil {
-        glog.Warning(err.Error())
+        glog.Error("failed to connected to ", ctx.consoleSockName)
         return
     }
 
-    tc := setupTty(ctx.consoleSockName, conn, make(chan interface{}))
+    glog.V(1).Info("connected to ", ctx.consoleSockName)
+
+    tc := setupTty(ctx.consoleSockName, conn.(*net.UnixConn), make(chan interface{}), true)
     tty := tc.Get()
     ctx.consoleTty = tc
     tc.start()
+    //directConnectConsole(ctx, ctx.consoleSockName, tc)
 
     for {
         line,ok := <- tty.Output
