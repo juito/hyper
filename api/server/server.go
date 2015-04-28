@@ -227,7 +227,7 @@ func getPodInfo(eng *engine.Engine, version version.Version, w http.ResponseWrit
 		return err
 	}
 
-	env.SetInt("Exist", int(dat["Exist"].(float64)))
+	env.Set("hostname", dat["hostname"].(string))
 	return writeJSONEnv(w, http.StatusCreated, env)
 }
 

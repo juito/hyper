@@ -71,16 +71,23 @@ func (daemon *Daemon) CmdPodInfo(job *engine.Job) error {
 		return fmt.Errorf("Can not get POD info withou POD ID")
 	}
 	podName := job.Args[0]
-	podExist := 0
-	// We need find the vm id which running POD
-	_, err := daemon.GetPodVmByName(podName)
+	hostname := ""
+	// We need to find the POD name
+	data, err := daemon.GetPodByName(podName)
+	glog.V(1).Infof("Process POD %s: GetPodByName()", podName)
 	if err != nil && strings.Contains(err.Error(), "not found") {
 		// bypass this error
 	} else {
-		podExist = 1
+		userPod, err := pod.ProcessPodBytes(data)
+		if err != nil {
+			glog.V(1).Infof("Process POD file error: %s", err.Error())
+			return err
+		}
+		hostname = userPod.Name
 	}
+	glog.V(1).Infof("Process POD %s: hostname is %s", podName, hostname)
 	v := &engine.Env{}
-	v.SetInt("Exist", podExist)
+	v.Set("hostname", hostname)
 	if _, err := v.WriteTo(job.Stdout); err != nil {
 		return err
 	}

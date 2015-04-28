@@ -19,7 +19,7 @@ func (cli *DvmClient) dial() (net.Conn, error) {
 	return net.Dial(cli.proto, cli.addr)
 }
 
-func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.ReadCloser, stdout, stderr io.Writer, started chan io.Closer, data interface{}) error {
+func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.ReadCloser, stdout, stderr io.Writer, started chan io.Closer, data interface{}, hostname string) error {
 	defer func() {
 		if started != nil {
 			close(started)
@@ -86,7 +86,8 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			return err
 		}
 		defer term.ReleaseFromStdInOut()
-		term.SetPrompt("root@helloworld: # ")
+		prompt := fmt.Sprintf("root@%s: # ", hostname)
+		term.SetPrompt(prompt)
 	}
 
 	if stdout != nil || stderr != nil {
