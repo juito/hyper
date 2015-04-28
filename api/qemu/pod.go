@@ -67,6 +67,12 @@ type VmPod struct {
     ShareDir    string `json:"shareDir"`
 }
 
+type TermInfo struct {
+    Name        string `json:"tty"`
+    Row         uint16 `json:"row"`
+    Column      uint16 `json:"column"`
+}
+
 type RunningContainer struct {
     Id          string `json:"id"`
 }

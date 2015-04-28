@@ -87,7 +87,7 @@ func (tc *ttyContext) sendMessage(msg string) {
         case c <- msg:
             glog.V(4).Infof("%s msg sent to #%d observer", tc.socketName, i)
         default:
-            glog.V(4).Infof("%s msg not sent to #%d observer", tc.socketName, i)
+            glog.Warningf("%s msg not sent to #%d observer", tc.socketName, i)
         }
     }
 }
