@@ -45,12 +45,16 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     tc := setupTty(ctx.consoleSockName, conn.(*net.UnixConn), make(chan interface{}), true)
     tty := tc.Get()
+
+    cout := make(chan string, 128)
+    go TtyLiner(tty.Output, cout)
+
     ctx.consoleTty = tc
     tc.start()
     //directConnectConsole(ctx, ctx.consoleSockName, tc)
 
     for {
-        line,ok := <- tty.Output
+        line,ok := <- cout
         if ok {
             glog.V(1).Info("[console] ", line)
         } else {
