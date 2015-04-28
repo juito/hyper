@@ -315,6 +315,7 @@ func stateInit(ctx *QemuContext, ev QemuEvent) {
                         VmId: ctx.id,
                         Code: types.E_OK,
                         Cause: "Start POD success",
+                        Data: ctx.vmSpec.runningInfo(),
                     }
                     ctx.timer.Stop()
                     ctx.Become(stateRunning)

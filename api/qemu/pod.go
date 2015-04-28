@@ -67,6 +67,15 @@ type VmPod struct {
     ShareDir    string `json:"shareDir"`
 }
 
+type RunningContainer struct {
+    Id          string `json:"id"`
+}
+
+type RunningPod struct {
+    Hostname    string `json:"hostname"`
+    Containers  []RunningContainer
+}
+
 type PreparingItem interface {
     ItemType() string
 }
@@ -77,6 +86,17 @@ type ContainerInfo struct {
     Images  []string
     Workdir string
     Cmd     string
+}
+
+func (p *VmPod) runningInfo() *RunningPod {
+    containers := make([]RunningContainer, len(p.Containers))
+    for idx,c := range containers {
+        c.Id = p.Containers[idx].Id
+    }
+    return &RunningPod{
+        Hostname:   p.Hostname,
+        Containers: containers,
+    }
 }
 
 //validate
