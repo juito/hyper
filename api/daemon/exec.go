@@ -20,19 +20,20 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	typeKey := job.Args[0]
 	typeVal := job.Args[1]
 	command := job.Args[2]
-	var podName string
+	var podId string
 
 	// We need find the vm id which running POD, and stop it
 	if typeKey == "pod" {
-		podName = typeVal
+		podId = typeVal
 	} else {
 		container := typeVal
-		podName, err = daemon.GetPodByContainer(container)
+		glog.V(1).Infof("Get container id is %s", container)
+		podId, err = daemon.GetPodByContainer(container)
 		if err != nil {
 			return
 		}
 	}
-	vmid, err := daemon.GetPodVmByName(podName)
+	vmid, err := daemon.GetPodVmByName(podId)
 	if err != nil {
 		return err
 	}

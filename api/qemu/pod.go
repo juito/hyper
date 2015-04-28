@@ -90,8 +90,8 @@ type ContainerInfo struct {
 
 func (p *VmPod) runningInfo() *RunningPod {
     containers := make([]RunningContainer, len(p.Containers))
-    for idx,c := range containers {
-        c.Id = p.Containers[idx].Id
+    for idx, c := range p.Containers {
+        containers[idx].Id = c.Id
     }
     return &RunningPod{
         Hostname:   p.Hostname,
