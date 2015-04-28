@@ -343,7 +343,7 @@ func newSerialPortSession(ctx *QemuContext, sockName string, idx,addr int) *QmpS
     index    := strconv.Itoa(idx)
     devId    := "podttys" + index
     //ttysName := "org.getdvm.podttys." + index
-    ttysName := fmt.Sprintf("/dev/ttyS%d", idx + 1)
+    ttysName := fmt.Sprintf("ttyS%d", idx + 1)
     commands := make([]*QmpCommand, 2)
     commands[0] = &QmpCommand{
         Execute: "chardev-add",
