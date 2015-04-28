@@ -130,7 +130,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 					line, err = term.ReadLine()
 				}
 			}
-			io.Copy(rwc, strings.NewReader(line))
+			io.Copy(rwc, strings.NewReader("exit\r\n"))
 			fmt.Printf("[hijack] End of stdin\n")
 		}
 

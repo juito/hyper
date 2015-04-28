@@ -117,10 +117,19 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 					stop <- true
 					return nil
 				} else {
-					ttyIO.Input <- command +"\015\012"
+					ttyIO.Input <- command +"\015"
 				}
 			}
 		}
 	}
+	var detachCommand = &qemu.DetachCommand {
+		Tty: ttyIO,
+	}
+	if typeKey == "pod" {
+		detachCommand.Container = ""
+	} else {
+		detachCommand.Container = typeVal
+	}
+	qemuEvent.(chan qemu.QemuEvent) <-detachCommand
 	return nil
 }
