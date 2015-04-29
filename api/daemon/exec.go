@@ -2,12 +2,10 @@ package daemon
 
 import (
 	"fmt"
-	"io"
 	"strings"
 	"dvm/engine"
 	"dvm/lib/glog"
 	"dvm/api/qemu"
-	"dvm/lib/utils"
 )
 
 func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
@@ -38,14 +36,15 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	}
 	var (
 		stop = make(chan bool, 1)
-		cStdout io.WriteCloser
-		cStdin  io.ReadCloser
 		ttyIO *qemu.TtyIO
-		ttyIOChan = make(chan *qemu.TtyIO, 1)
 	)
 
+	ttyIO.Stdin = job.Stdin
+	ttyIO.Stdout = job.Stdout
+
 	var attachCommand = &qemu.AttachCommand {
-		Callback: ttyIOChan,
+		Streams: ttyIO,
+		Size:    nil,
 	}
 	if typeKey == "pod" {
 		attachCommand.Container = ""
@@ -57,7 +56,6 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		return err
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-attachCommand
-	ttyIO = <-ttyIOChan
 
 	execCommand := &qemu.ExecCommand {
 		Command: strings.Split(command, " "),
@@ -65,40 +63,9 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-execCommand
 
-	r, w := io.Pipe()
-	go func() {
-		defer w.Close()
-		defer glog.V(1).Info("Close the io Pipe!")
-		io.Copy(w, job.Stdin)
-	} ()
-	cStdin = r
-	go func() {
-		io.Copy(ttyIO.Input, cStdin)
-		defer glog.V(1).Info("Close the Stdin!")
-	} ()
-	cStdout = job.Stdout
-	go func() {
-		utils.CopyEscapable(cStdout, ttyIO.Output)
-		defer glog.V(1).Info("Close the Stdout!")
-	}()
-
 	defer func() {
 		close(stop)
-		close(ttyIOChan)
-
-		if cStdout != nil {
-			cStdout.Close()
-		}
-
-		var detachCommand = &qemu.DetachCommand {
-			Tty: ttyIO,
-		}
-		if typeKey == "pod" {
-			detachCommand.Container = ""
-		} else {
-			detachCommand.Container = typeVal
-		}
-		qemuEvent.(chan qemu.QemuEvent) <-detachCommand
+		glog.V(2).Info("Defer function for exec!")
 	} ()
 	return nil
 }

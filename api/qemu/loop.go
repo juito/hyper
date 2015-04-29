@@ -393,7 +393,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if cmd.size != nil {
+                if cmd.Size != nil {
                     setWindowSize(ctx, cmd.Container, cmd.Size)
                 }
                 if cmd.Container == "" { //console
