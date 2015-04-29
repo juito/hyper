@@ -37,6 +37,7 @@ const(
     COMMAND_EXEC
     COMMAND_ATTACH
     COMMAND_DETACH
+    COMMAND_WINDOWSIZE
     COMMAND_ACK
     ERROR_INIT_FAIL
     ERROR_QMP_FAIL
@@ -59,14 +60,14 @@ const(
     INIT_SETDVM = iota
     INIT_STARTPOD
     INIT_GETPOD
-    INIT_RMPOD
+    INIT_STOPPOD
     INIT_NEWCONTAINER
     INIT_EXECCMD
     INIT_SHUTDOWN
     INIT_READY
     INIT_ACK
     INIT_ERROR
-    INIT_STOPPOD
+    INIT_WINSIZE
 )
 
 const (
@@ -106,6 +107,7 @@ func EventString(ev int) string {
         case COMMAND_EXEC: return "COMMAND_EXEC"
         case COMMAND_ATTACH: return "COMMAND_ATTACH"
         case COMMAND_DETACH: return "COMMAND_DETACH"
+        case COMMAND_WINDOWSIZE: return "COMMAND_WINDOWSIZE"
         case COMMAND_ACK: return "COMMAND_ACK"
         case ERROR_INIT_FAIL: return "ERROR_INIT_FAIL"
         case ERROR_QMP_FAIL: return "ERROR_QMP_FAIL"

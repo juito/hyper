@@ -475,6 +475,13 @@ func (ctx* QemuContext) Lookup(container string) int {
     return -1
 }
 
+func (ctx* QemuContext) Idx2Tty(idx int) string {
+    if idx < 0 || idx > len(ctx.devices.ttyMap) {
+        return "ttyS0"
+    }
+    return fmt.Sprintf("ttyS%d", idx + 1)
+}
+
 func (ctx *QemuContext) Close() {
     ctx.lock.Lock()
     defer ctx.lock.Unlock()
