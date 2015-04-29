@@ -3,11 +3,12 @@ package daemon
 import (
 	"fmt"
 	"io"
-	"bufio"
+	"bytes"
 	"strings"
 	"dvm/engine"
 	"dvm/lib/glog"
 	"dvm/api/qemu"
+	"dvm/lib/utils"
 )
 
 func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
@@ -75,51 +76,15 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		io.Copy(w, job.Stdin)
 	} ()
 	cStdin = r
+	go func() {
+		io.Copy(ttyIO.Input, cStdin)
+		defer glog.V(1).Info("Close the Stdin!")
+	}
 	cStdout = job.Stdout
 	go func() {
-		for {
-			select {
-			case output := <-ttyIO.Output:
-				glog.V(1).Infof("%s", output)
-				fmt.Fprintf(cStdout, "%s\n", output)
-			case <-stop:
-				return
-			}
-		}
-	} ()
-
-
-	go func () {
-		for {
-			reader := bufio.NewReader(cStdin)
-			data, _, _ := reader.ReadLine()
-			command := string(data)
-			if command == "" {
-				continue
-			}
-			glog.V(1).Infof("command from client : %s!", command)
-			input <- command
-			if command == "exit" {
-				break
-			}
-		}
-	} ()
-
-	for {
-		select {
-		case <-stop:
-			glog.V(1).Info("The output program is stopped!")
-		case command := <-input:
-			glog.Infof("find a command, %s", command)
-			if command != "" {
-				if command == "exit" {
-					stop <- true
-					return nil
-				} else {
-					ttyIO.Input <- command +"\015\012"
-				}
-			}
-		}
+		utils.CopyEscapable(cStdout, ttyIO.Ouput)
+		defer glog.V(1).Info("Close the Stdout!")
 	}
+
 	return nil
 }
