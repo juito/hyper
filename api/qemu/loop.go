@@ -89,6 +89,25 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     }
 }
 
+func setWindowSize(ctx *QemuContext, container string, size *WindowSize) error {
+    msg, err := json.Marshal(map[string]interface{}{
+        "tty": ctx.Idx2Tty(ctx.Lookup(container)),
+        "row": size.Row,
+        "column": size.Column,
+    })
+    if err != nil {
+        ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+            Cause: fmt.Sprintf("command window size parse failed",),
+        }
+        return err
+    }
+    ctx.vm <- &DecodedMessage{
+        code: INIT_WINSIZE,
+        message: msg,
+    }
+    return nil
+}
+
 func runPod(ctx *QemuContext) {
     pod,err := json.Marshal(*ctx.vmSpec)
     if err != nil {
@@ -363,21 +382,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_WINDOWSIZE:
                 cmd := ev.(*WindowSizeCommand)
-                msg, err := json.Marshal(map[string]interface{}{
-                    "tty": ctx.Idx2Tty(ctx.Lookup(cmd.Container)),
-                    "row": cmd.Size.Row,
-                    "column": cmd.Size.Column,
-                })
-                if err != nil {
-                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
-                        Cause: fmt.Sprintf("command window size parse failed",),
-                    }
-                    return
-                }
-                ctx.vm <- &DecodedMessage{
-                    code: INIT_WINSIZE,
-                    message: msg,
-                }
+                setWindowSize(ctx, cmd.Container, cmd.Size)
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_EXECCMD {
@@ -388,23 +393,17 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if cmd.Container == "" { //console
-                    glog.V(1).Info("Allocating vm console tty.")
-                    cmd.Callback <- ctx.consoleTty.Get()
-                } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
-                    glog.V(1).Info("Allocating tty for ", cmd.Container)
-                    tc := ctx.devices.ttyMap[idx]
-                    cmd.Callback <- tc.Get()
+                if cmd.size != nil {
+                    setWindowSize(ctx, cmd.Container, cmd.size)
                 }
-            case COMMAND_DETACH:
-                cmd := ev.(*DetachCommand)
-                if cmd.Container == "" {
-                    glog.V(1).Info("Drop vm console tty.")
-                    ctx.consoleTty.Drop(cmd.Tty)
+                if cmd.Container == "" { //console
+                    glog.V(1).Info("Connecting vm console tty.")
+                    tc := ctx.consoleTty
+                    tc.connect(cmd.streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
-                    glog.V(1).Info("Drop tty for ", cmd.Container)
+                    glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    tc.Drop(cmd.Tty)
+                    tc.connect(cmd.streams)
                 }
             default:
                 glog.Warning("got event during pod running")
