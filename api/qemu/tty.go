@@ -9,9 +9,6 @@ import (
     "os"
     "time"
     "github.com/kr/pty"
-    "syscall"
-    "errors"
-    "unsafe"
 )
 
 type TtyIO struct {
@@ -185,7 +182,7 @@ func attachSerialPort(ctx *QemuContext, index,addr int) {
 func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
     tc := setupTty(sockName, conn, make(chan interface{}), true)
 //    tc.start()
-    directConnectConsole(ctx, sockName, tc)
+    directConnectConsole(ctx, sockName, index, tc)
 
     ctx.hub <- &TtyOpenEvent{
         Index:  index,
@@ -193,7 +190,7 @@ func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index
     }
 }
 
-func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) error {
+func directConnectConsole(ctx *QemuContext, sockName string, index int, tc *ttyContext) error {
     pts, console, err := pty.Open()
     if err != nil {
         glog.Error("fail to open pty/tty: ", err.Error())
@@ -203,16 +200,21 @@ func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) err
         return err
     }
 
-    termSize(console)
-    termSize(os.Stdin)
-    termSize(os.Stdout)
-
-    err = setNoEcho(pts)
+    size, err := GetTermSize(os.Stdin)
     if err != nil {
+        glog.Info("not working in tty")
+    } else if err := SetTermSize(console, size); err != nil {
+        glog.Warningf("set pty window size to %dx%d failed", size.Row, size.Column)
+    } else {
+        glog.V(1).Infof("Got window size %dx%d, and set to pty", size.Row, size.Column)
+        container := ctx.vmSpec.Containers[index].Id
+        TtySizeMonitor(ctx, container)
+    }
+
+    if err := setNoEcho(pts); err != nil {
         glog.Error("pts ", err.Error())
     }
-    err = setNoEcho(console)
-    if err != nil {
+    if err := setNoEcho(console); err != nil {
         glog.Error("pty ", err.Error())
     }
 
@@ -223,22 +225,4 @@ func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) err
 
 
     return nil
-}
-
-func termSize(file *os.File) (*WindowSize, error) {
-    type winsize struct {
-        ws_row uint16
-        ws_col uint16
-        ws_xpixel uint16
-        ws_ypixel uint16
-    }
-    var size winsize
-    _,_,err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(file.Fd()), uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&size)))
-    if int(err) < 0 {
-        return nil, errors.New("Get window size failed")
-    }
-
-    glog.V(1).Infof("Got window size %dx%d (and %d, %d)", size.ws_row, size.ws_col, size.ws_xpixel, size.ws_ypixel)
-
-    return &WindowSize{Row:size.ws_row, Column:size.ws_col,}, nil
 }
