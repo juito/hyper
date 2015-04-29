@@ -361,6 +361,23 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                     code: INIT_EXECCMD,
                     message: pkg,
                 }
+            case COMMAND_WINDOWSIZE:
+                cmd := ev.(*WindowSizeCommand)
+                msg, err := json.Marshal(map[string]interface{}{
+                    "tty": ctx.Idx2Tty(ctx.Lookup(cmd.Container)),
+                    "row": cmd.Size.Row,
+                    "column": cmd.Size.Column,
+                })
+                if err != nil {
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+                        Cause: fmt.Sprintf("command window size parse failed",),
+                    }
+                    return
+                }
+                ctx.vm <- &DecodedMessage{
+                    code: INIT_WINSIZE,
+                    message: msg,
+                }
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_EXECCMD {

@@ -54,6 +54,11 @@ type CommandAck struct {
     msg     []byte
 }
 
+type WindowSizeCommand struct {
+    Container   string
+    Size        *WindowSize
+}
+
 type ContainerCreatedEvent struct {
     Index   int
     Id      string
@@ -152,6 +157,7 @@ func (qe* ReplacePodCommand)        Event() int { return COMMAND_REPLACE_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
 func (qe* AttachCommand)            Event() int { return COMMAND_ATTACH }
 func (qe* DetachCommand)            Event() int { return COMMAND_DETACH }
+func (qe* WindowSizeCommand)        Event() int { return COMMAND_WINDOWSIZE }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
