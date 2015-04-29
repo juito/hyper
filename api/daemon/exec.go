@@ -36,14 +36,14 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	}
 	var (
 		stop = make(chan bool, 1)
-		ttyIO *qemu.TtyIO
+		ttyIO qemu.TtyIO
 	)
 
 	ttyIO.Stdin = job.Stdin
 	ttyIO.Stdout = job.Stdout
 
 	var attachCommand = &qemu.AttachCommand {
-		Streams: ttyIO,
+		Streams: &ttyIO,
 		Size:    nil,
 	}
 	if typeKey == "pod" {
