@@ -394,16 +394,16 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
                 if cmd.size != nil {
-                    setWindowSize(ctx, cmd.Container, cmd.size)
+                    setWindowSize(ctx, cmd.Container, cmd.Size)
                 }
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Connecting vm console tty.")
                     tc := ctx.consoleTty
-                    tc.connect(cmd.streams)
+                    tc.connect(cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    tc.connect(cmd.streams)
+                    tc.connect(cmd.Streams)
                 }
             default:
                 glog.Warning("got event during pod running")

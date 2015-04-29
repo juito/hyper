@@ -41,8 +41,8 @@ type ShutdownCommand struct {}
 
 type AttachCommand struct {
     Container string
-    streams   *TtyIO
-    size      *WindowSize
+    Streams   *TtyIO
+    Size      *WindowSize
 }
 
 type CommandAck struct {
