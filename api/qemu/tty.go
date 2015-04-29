@@ -8,6 +8,7 @@ import (
     "strconv"
     "os"
     "time"
+    "sync"
 )
 
 type WindowSize struct {
@@ -23,7 +24,9 @@ type TtyIO struct {
 type ttyContext struct {
     socketName  string
     vmConn      net.Conn
-    command     chan interface{}
+    receivers   []io.Writer
+    newttys     []*TtyIO
+    lock        *sync.Mutex
 }
 
 func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {
@@ -41,18 +44,77 @@ func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyConte
     ttyc := &ttyContext{
         socketName: name,
         vmConn:     c,
+        receivers:  []io.Writer{},
+        newttys:    []*TtyIO{},
+        lock:       &sync.Mutex{},
     }
 
     ttyc.connect(initIO)
+    go ttyReceive(ttyc)
+
     return ttyc
 }
 
+func ttyReceive(tc *ttyContext) {
+    buf:= make([]byte, 1)
+    for {
+        nr,err := tc.vmConn.Read(buf)
+        if err != nil {
+            glog.Error("reader exit... ", err.Error())
+            return
+        }
+
+        avail := []io.Writer{}
+        for _,rd := range tc.receivers {
+            _,err := rd.Write(buf[:nr])
+            if err != nil {
+                glog.V(0).Info("Writer close ", err.Error())
+                continue
+            }
+            avail = append(avail, rd)
+        }
+        
+        tc.lock.Lock()
+        for _,tty := range tc.newttys {
+            avail = append(avail, tty.Stdout)
+        }
+        tc.newttys = []*TtyIO{}
+        tc.receivers = avail
+        tc.lock.Unlock()
+    }
+}
+
+
 func (tc *ttyContext) connect(tty *TtyIO) {
     if tty.Stdin != nil {
-        go io.Copy(tc.vmConn, tty.Stdin)
+        go func() {
+            buf := make([]byte, 1)
+            for {
+                nr,err := tty.Stdin.Read(buf)
+                if err != nil {
+                    glog.Info("a stdin closed, ", err.Error())
+                    return
+                }
+                _,err = tc.vmConn.Write(buf[:nr])
+                if err != nil {
+                    glog.Info("vm connection closed, close reader tty, ", err.Error())
+                    tty.Stdin.Close()
+                    return
+                }
+            }
+        }()
     }
     if tty.Stdout != nil {
-        go io.Copy(tty.Stdout, tc.vmConn)
+        tc.lock.Lock()
+        tc.newttys = append(tc.newttys, tty)
+        tc.lock.Unlock()
+//        go func() {
+//            len,err := io.Copy(tty.Stdout, tc.vmConn)
+//            if err != nil {
+//                glog.Error("Terminated with ", err.Error())
+//            }
+//            glog.Infof("totally %d transfered", len)
+//        }()
     }
 }
 
