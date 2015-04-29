@@ -10,6 +10,11 @@ import (
     "time"
 )
 
+type WindowSize struct {
+    Row         uint16 `json:"row"`
+    Column      uint16 `json:"column"`
+}
+
 type TtyIO struct {
     Output chan byte
     Input  chan interface{}
