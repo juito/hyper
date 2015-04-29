@@ -202,6 +202,17 @@ func (daemon *Daemon) GetQemuChan(vmid string) (interface{}, interface{}, error)
 	return nil, nil, fmt.Errorf("Can not find the Qemu chan for pod: %s!", vmid)
 }
 
+func (daemon *Daemon) DeleteQemuChan(vmid string) error {
+	if daemon.qemuChan[vmid] != nil {
+		delete(daemon.qemuChan, vmid)
+	}
+	if daemon.qemuClientChan[vmid] != nil {
+		delete(daemon.qemuClientChan, vmid)
+	}
+
+	return nil
+}
+
 func (daemon *Daemon) SetQemuChan(vmid string, qemuchan, qemuclient interface{}) error {
 	if daemon.qemuChan[vmid] == nil {
 		if qemuchan != nil {

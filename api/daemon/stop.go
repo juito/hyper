@@ -46,5 +46,11 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 		return err
 	}
 
+	defer func() {
+		daemon.DeletePodVmFromDB(podID)
+		daemon.DeletePodFromDB(podID)
+		daemon.DeleteQemuChan(string(vmid))
+	} ()
+
 	return nil
 }
