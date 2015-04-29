@@ -6,6 +6,7 @@ import (
 	"dvm/engine"
 	"dvm/lib/glog"
 	"dvm/api/qemu"
+	"dvm/api/types"
 )
 
 func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
@@ -51,7 +52,7 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	} else {
 		attachCommand.Container = typeVal
 	}
-	qemuEvent, _, err := daemon.GetQemuChan(string(vmid))
+	qemuEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
 	if err != nil {
 		return err
 	}
@@ -67,5 +68,11 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		close(stop)
 		glog.V(2).Info("Defer function for exec!")
 	} ()
+	for {
+		qemuRespose := <-qemuStatus.(chan *types.QemuResponse)
+		if qemuRespose.Code == 100 {
+			break
+		}
+	}
 	return nil
 }

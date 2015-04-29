@@ -594,6 +594,14 @@ func (l *loggingT) header(s severity) *buffer {
 	buf.tmp[0] = ']'
 	buf.tmp[1] = ' '
 	buf.Write(buf.tmp[:2])
+	if l.verbosity > 1 {
+		buf.tmp[0] = '['
+		buf.tmp[1] = ':'
+		n := buf.someDigits(2, line)
+		buf.tmp[n+2] = ']'
+		buf.tmp[n+3] = ' '
+		buf.Write(buf.tmp[:n+4])
+	}
 
 	return buf
 }
