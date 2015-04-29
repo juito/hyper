@@ -112,7 +112,5 @@ func handleInterrupt(fd uintptr, state *State) {
 
 	go func() {
 		_ = <-sigchan
-		RestoreTerminal(fd, state)
-		os.Exit(0)
 	}()
 }

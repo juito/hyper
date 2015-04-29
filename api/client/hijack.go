@@ -81,6 +81,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 	)
 
 	if in != nil && setRawTerminal {
+		fmt.Printf("In the Raw Terminal!!!\n")
 		oldState, err = term.SetRawTerminal(cli.inFd)
 		if err != nil {
 			return err

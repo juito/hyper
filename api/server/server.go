@@ -269,7 +269,6 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 	job.Stdin.Add(inStream)
 	job.Stdout.Add(outStream)
 	job.Stderr.Set(errStream)
-	errOut = outStream
 
 	// Now run the user process in container.
 	job.SetCloseIO(false)

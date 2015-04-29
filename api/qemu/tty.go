@@ -145,3 +145,4 @@ func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index
         TC:     tc,
     }
 }
+
