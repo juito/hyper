@@ -3,7 +3,6 @@ package daemon
 import (
 	"fmt"
 	"io"
-	"bytes"
 	"strings"
 	"dvm/engine"
 	"dvm/lib/glog"
@@ -39,15 +38,12 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	}
 	var (
 		stop = make(chan bool, 1)
-		input = make(chan string, 1)
-		cStdout io.Writer
+		cStdout io.WriteCloser
 		cStdin  io.ReadCloser
 		ttyIO *qemu.TtyIO
 		ttyIOChan = make(chan *qemu.TtyIO, 1)
 	)
-	defer close(stop)
-	defer close(input)
-	defer close(ttyIOChan)
+
 	var attachCommand = &qemu.AttachCommand {
 		Callback: ttyIOChan,
 	}
@@ -79,12 +75,30 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	go func() {
 		io.Copy(ttyIO.Input, cStdin)
 		defer glog.V(1).Info("Close the Stdin!")
-	}
+	} ()
 	cStdout = job.Stdout
 	go func() {
-		utils.CopyEscapable(cStdout, ttyIO.Ouput)
+		utils.CopyEscapable(cStdout, ttyIO.Output)
 		defer glog.V(1).Info("Close the Stdout!")
-	}
+	}()
 
+	defer func() {
+		close(stop)
+		close(ttyIOChan)
+
+		if cStdout != nil {
+			cStdout.Close()
+		}
+
+		var detachCommand = &qemu.DetachCommand {
+			Tty: ttyIO,
+		}
+		if typeKey == "pod" {
+			detachCommand.Container = ""
+		} else {
+			detachCommand.Container = typeVal
+		}
+		qemuEvent.(chan qemu.QemuEvent) <-detachCommand
+	} ()
 	return nil
 }
