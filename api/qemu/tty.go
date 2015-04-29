@@ -9,6 +9,9 @@ import (
     "os"
     "time"
     "github.com/kr/pty"
+    "syscall"
+    "errors"
+    "unsafe"
 )
 
 type TtyIO struct {
@@ -191,7 +194,7 @@ func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index
 }
 
 func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) error {
-    pty, console, err := pty.Open()
+    pts, console, err := pty.Open()
     if err != nil {
         glog.Error("fail to open pty/tty: ", err.Error())
         ctx.hub <- &InitFailedEvent{
@@ -200,9 +203,42 @@ func directConnectConsole(ctx *QemuContext, sockName string, tc *ttyContext) err
         return err
     }
 
-    go io.Copy(tc.vmConn, os.Stdin)
+    termSize(console)
+    termSize(os.Stdin)
+    termSize(os.Stdout)
+
+    err = setNoEcho(pts)
+    if err != nil {
+        glog.Error("pts ", err.Error())
+    }
+    err = setNoEcho(console)
+    if err != nil {
+        glog.Error("pty ", err.Error())
+    }
+
+    go io.Copy(tc.vmConn, console)
     go io.Copy(console, tc.vmConn)
-    go io.Copy(os.Stdout, pty)
+    go io.Copy(os.Stdout, pts)
+    go io.Copy(pts, os.Stdin)
+
 
     return nil
+}
+
+func termSize(file *os.File) (*WindowSize, error) {
+    type winsize struct {
+        ws_row uint16
+        ws_col uint16
+        ws_xpixel uint16
+        ws_ypixel uint16
+    }
+    var size winsize
+    _,_,err := syscall.Syscall(syscall.SYS_IOCTL, uintptr(file.Fd()), uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(&size)))
+    if int(err) < 0 {
+        return nil, errors.New("Get window size failed")
+    }
+
+    glog.V(1).Infof("Got window size %dx%d (and %d, %d)", size.ws_row, size.ws_col, size.ws_xpixel, size.ws_ypixel)
+
+    return &WindowSize{Row:size.ws_row, Column:size.ws_col,}, nil
 }
