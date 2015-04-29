@@ -130,7 +130,7 @@ func commonStateHandler(ctx *QemuContext, ev QemuEvent) bool {
             }
         })
     case COMMAND_SHUTDOWN:
-        ctx.vm <- &DecodedMessage{ code: INIT_SHUTDOWN, message: []byte{}, }
+        ctx.vm <- &DecodedMessage{ code: INIT_DESTROYPOD, message: []byte{}, }
         ctx.transition = nil
         ctx.timer = time.AfterFunc(3*time.Second, func(){
             if ctx.handler != nil {
@@ -425,8 +425,8 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
         switch ev.Event() {
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
-                if ack.reply == INIT_SHUTDOWN {
-                    glog.Info("Shutting down command was accepted by init", string(ack.msg))
+                if ack.reply == INIT_DESTROYPOD {
+                    glog.Info("Destroy pod command was accepted by init", string(ack.msg))
                 } else {
                     glog.Warning("[Terminating] wrong reply to ", string(ack.reply), string(ack.msg))
                 }

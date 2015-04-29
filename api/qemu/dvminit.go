@@ -102,8 +102,8 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
             glog.Info("vm channel closed, quit")
             break
         }
-        if cmd.code == INIT_SHUTDOWN {
-            glog.Info("Sending shutdown command, last round of command to init")
+        if cmd.code == INIT_DESTROYPOD {
+            glog.Info("Sending destroy pod command, last round of command to init")
             looping = false
         }
         init.Write(newVmMessage(cmd))
