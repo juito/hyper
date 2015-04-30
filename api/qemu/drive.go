@@ -274,5 +274,21 @@ func UmountVolume(shareDir, volPath string, name string, hub chan QemuEvent) {
 		glog.Warningf("Cannot umount volume %s: %s", mount, err.Error())
 		success = false
 	}
+	// After umount that device, we need to delete it
+	hub <-  &VolumeUnmounted{ Name: name, Success:success,}
+}
+
+func UmountDMDevice(deviceFullPath, name string, hub chan QemuEvent) {
+	cmd := exec.Command("dmsetup remove", deviceFullPath)
+	success := true
+	if err := cmd.Run(); err != nil {
+		glog.Warningf("Cannot umount device %s: %s", deviceFullPath, err.Error())
+		success = false
+	} else {
+		// Command was successful
+		success = true
+	}
+
+	// After umount that device, we need to delete it
 	hub <-  &VolumeUnmounted{ Name: name, Success:success,}
 }

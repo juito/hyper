@@ -430,6 +430,8 @@ func (ctx *QemuContext) releaseVolumeDir() {
             glog.V(1).Info("need umount dir ", vol.info.filename)
             ctx.progress.deleting.volumes[name] = true
             go UmountVolume(ctx.shareDir, vol.info.filename, name, ctx.hub)
+        } else {
+            go UmountDMDevice(vol.info.filename, name, ctx.hub)
         }
     }
 }
