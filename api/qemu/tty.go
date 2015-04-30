@@ -119,8 +119,8 @@ func (tc *ttyContext) closeTerm(attach_id uint64) {
 
 func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
 
-    if _,ok := tc.subscribers[attach_id]; !ok {
-        glog.Error("%d has already attached in this tty, cannot connected", attach_id)
+    if _,ok := tc.subscribers[attach_id]; ok {
+        glog.Errorf("%d has already attached in this tty, cannot connected", attach_id)
         return errors.New("repeat attach a same attach id")
     }
 
