@@ -359,6 +359,17 @@ func postImageCreate(eng *engine.Engine, version version.Version, w http.Respons
 	return nil
 }
 
+func postTtyResize(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+	job := eng.Job("tty", r.Form.Get("id"), r.Form.Get("h"), r.Form.Get("w"))
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
 func optionsHandler(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	w.WriteHeader(http.StatusOK)
 	return nil
@@ -455,6 +466,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/image/create":				   postImageCreate,
 			"/pod/create":					   postPodCreate,
 			"/exec":                           postExec,
+			"/tty/resize":                     postTtyResize,
 		},
 		"DELETE": {
 		},

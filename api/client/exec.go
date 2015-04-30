@@ -57,6 +57,10 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		return cli.hijack("POST", "/exec?"+v.Encode(), true, cli.in, cli.out, cli.out, hijacked, nil, hostname)
 	})
 
+	if err := cli.monitorTtySize(podName); err != nil {
+		fmt.Printf("Monitor tty size fail for %s!\n", podName)
+	}
+
 	// Acknowledge the hijack before starting
 	select {
 	case closer := <-hijacked:
