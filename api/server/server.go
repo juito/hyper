@@ -284,6 +284,42 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 	return nil
 }
 
+func postAttach(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+
+	var (
+		job = eng.Job("attach", r.Form.Get("type"), r.Form.Get("value"))
+		errOut io.Writer = os.Stderr
+		errStream io.Writer
+	)
+
+	// Setting up the streaming http interface.
+	inStream, outStream, err := hijackServer(w)
+	if err != nil {
+		return err
+	}
+	defer closeStreams(inStream, outStream)
+
+	fmt.Fprintf(outStream, "HTTP/1.1 101 UPGRADED\r\nContent-Type: application/vnd.docker.raw-stream\r\nConnection: Upgrade\r\nUpgrade: tcp\r\n\r\n")
+
+	errStream = outStream
+	job.Stdin.Add(inStream)
+	job.Stdout.Add(outStream)
+	job.Stderr.Set(errStream)
+
+	// Now run the user process in container.
+	job.SetCloseIO(false)
+	if err := job.Run(); err != nil {
+		fmt.Fprintf(errOut, "Error starting attach to POD %s: %s\n", r.Form.Get("podname"), err.Error())
+		return err
+	}
+	w.WriteHeader(http.StatusNoContent)
+
+	return nil
+}
+
 func postContainerCreate(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	if err := r.ParseForm(); err != nil {
 		return nil
@@ -469,6 +505,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/image/create":				   postImageCreate,
 			"/pod/create":					   postPodCreate,
 			"/exec":                           postExec,
+			"/attach":						   postAttach,
 			"/tty/resize":                     postTtyResize,
 		},
 		"DELETE": {

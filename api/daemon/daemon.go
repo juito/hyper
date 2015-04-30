@@ -45,6 +45,7 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		"list":              daemon.CmdList,
 		"stop":              daemon.CmdStop,
 		"exec":              daemon.CmdExec,
+		"attach":			 daemon.CmdAttach,
 		"tty":               daemon.CmdTty,
 		"serveapi":			 apiserver.ServeApi,
 		"acceptconnections": apiserver.AcceptConnections,
