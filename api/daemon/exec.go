@@ -36,8 +36,10 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		return err
 	}
 	var (
-		stop = make(chan bool, 1)
 		ttyIO qemu.TtyIO
+		qemuCallback = make(chan *types.QemuResponse, 1)
+		qemuResponse *types.QemuResponse
+		sequence   uint64
 	)
 
 	ttyIO.Stdin = job.Stdin
@@ -46,6 +48,7 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	var attachCommand = &qemu.AttachCommand {
 		Streams: &ttyIO,
 		Size:    nil,
+		Callback: qemuCallback,
 	}
 	if typeKey == "pod" {
 		attachCommand.Container = ""
@@ -57,22 +60,24 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		return err
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-attachCommand
+	attachResponse := <-qemuCallback
+	sequence = attachResponse.Data.(uint64)
 
 	execCommand := &qemu.ExecCommand {
+		Sequence: sequence,
 		Command: strings.Split(command, " "),
-		Container: "",
+		Container: attachCommand.Container,
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-execCommand
 
-	defer func() {
-		close(stop)
-		glog.V(2).Info("Defer function for exec!")
-	} ()
 	for {
-		qemuRespose := <-qemuStatus.(chan *types.QemuResponse)
-		if qemuRespose.Code == 100 {
+		qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
+		if qemuResponse.Data == sequence {
 			break
 		}
 	}
+	defer func() {
+		glog.V(2).Info("Defer function for exec!")
+	} ()
 	return nil
 }

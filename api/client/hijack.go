@@ -127,6 +127,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			fmt.Printf("Error receiveStdout: %s\n", err.Error())
 			return err
 		}
+		sendStdin <- nil
 	}
 	if in != nil {
 		if err := <-sendStdin ; err != nil {
