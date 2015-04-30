@@ -5,12 +5,18 @@ import (
     "dvm/lib/glog"
     "time"
     "fmt"
+    "dvm/api/types"
+    "encoding/json"
 )
 
 // Message
 type DecodedMessage struct {
     code    uint32
     message []byte
+}
+
+type FinishCmd struct {
+    Seq uint64 `json:"seq"`
 }
 
 func newVmMessage(m *DecodedMessage) []byte {
@@ -96,27 +102,72 @@ func waitInitReady(ctx *QemuContext) {
 
 func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
     looping := true
+    cmds := []*DecodedMessage{}
+
+    go waitInitAck(ctx, init)
+
     for looping {
         cmd,ok := <- ctx.vm
         if !ok {
             glog.Info("vm channel closed, quit")
             break
         }
-        if cmd.code == INIT_SHUTDOWN {
-            glog.Info("Sending shutdown command, last round of command to init")
-            looping = false
+        if cmd.code == INIT_ACK {
+            if len(cmds) > 0 {
+                ctx.hub <- &CommandAck{
+                    reply: cmds[0].code,
+                    msg:   cmd.message,
+                }
+                cmds = cmds[1:]
+            } else {
+                glog.Error("got ack but no command in queue")
+            }
+        } else{
+            if cmd.code == INIT_SHUTDOWN {
+                glog.Info("Sending shutdown command, last round of command to init")
+                looping = false
+            }
+            init.Write(newVmMessage(cmd))
+            cmds = append(cmds, cmd)
         }
-        init.Write(newVmMessage(cmd))
+    }
+}
+
+func waitInitAck(ctx *QemuContext, init *net.UnixConn) {
+    for {
         res,err := readVmMessage(init)
         if err != nil {
             ctx.hub <- &Interrupted{ reason: "dvminit socket failed " + err.Error(), }
             return
         } else if res.code == INIT_ACK {
-            ctx.hub <- &CommandAck{
-                reply: cmd.code,
-                msg:res.message,
+            ctx.vm <- res
+        } else if res.code == INIT_FINISHCMD {
+            jv := FinishCmd{}
+            err = json.Unmarshal(res.message, &jv)
+            if err != nil {
+                glog.Errorf("finish cmd message failed, cannot parse json: ", err.Error())
+            } else {
+                seq := jv.Seq
+                glog.V(1).Infof("got sequence %d", seq)
+
+                if !ctx.consoleTty.findAndClose(seq) {
+                    for idx,tty := range ctx.devices.ttyMap {
+                        if tty.findAndClose(seq) {
+                            glog.V(1).Infof("command on tty %d of container %d has finished, close it", seq, idx)
+                            break
+                        }
+                    }
+                } else {
+                    glog.V(1).Infof("command on console tty %d has finished, close it", seq)
+                }
+
+                ctx.client <- &types.QemuResponse{
+                    VmId:  ctx.id,
+                    Code:  types.E_EXEC_FINISH,
+                    Cause: "Command finished",
+                    Data:  seq,
+                }
             }
         }
-
     }
 }

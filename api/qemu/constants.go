@@ -69,6 +69,7 @@ const(
     INIT_ACK
     INIT_ERROR
     INIT_WINSIZE
+    INIT_FINISHCMD
 )
 
 const (
