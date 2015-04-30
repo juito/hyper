@@ -10,6 +10,7 @@ const (
     Kernel      = "/sources/dvminit/test/kernel"
     Initrd      = "/sources/dvminit/test/initrd-dvm.img"
     PciAddrFrom = 0x05
+    ExitChar    = 4
 )
 
 const(

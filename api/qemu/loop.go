@@ -365,13 +365,13 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_EXEC:
                 cmd := ev.(*ExecCommand)
                 if ctx.transition != nil {
-                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running",}
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running", Data: cmd.Sequence,}
                     return
                 }
                 pkg,err := json.Marshal(*cmd)
                 if err != nil {
                     ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
-                        Cause: fmt.Sprintf("command %s parse failed", cmd.Command,),
+                        Cause: fmt.Sprintf("command %s parse failed", cmd.Command,), Data: cmd.Sequence,
                     }
                     return
                 }
@@ -393,17 +393,34 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
+                id  := ctx.nextAttachId()
+                var err error = nil
                 if cmd.Size != nil {
                     setWindowSize(ctx, cmd.Container, cmd.Size)
                 }
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Connecting vm console tty.")
                     tc := ctx.consoleTty
-                    tc.connect(cmd.Streams)
+                    err = tc.connect(id, cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    tc.connect(cmd.Streams)
+                    err = tc.connect(id, cmd.Streams)
+                }
+                if err != nil {
+                    cmd.Callback <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_BUSY,
+                        Cause: err.Error(),
+                        Data: id,
+                    }
+                } else {
+                    cmd.Callback <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_OK,
+                        Cause: "Attached",
+                        Data: id,
+                    }
                 }
             default:
                 glog.Warning("got event during pod running")

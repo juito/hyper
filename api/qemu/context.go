@@ -20,6 +20,7 @@ type QemuContext struct {
     memory  int
     pciAddr int  //next available pci addr for pci hotplug
     scsiId  int  //next available scsi id for scsi hotplug
+    attachId uint64 //next available attachId for attached tty
     kernel  string
     initrd  string
 
@@ -178,6 +179,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         memory:     memory,
         pciAddr:    PciAddrFrom,
         scsiId:     0,
+        attachId:   1,
         kernel:     Kernel,
         initrd:     Initrd,
         hub:        hub,
@@ -227,6 +229,7 @@ func (ctx *QemuContext) resetAddr() {
     ctx.lock.Lock()
     ctx.pciAddr = PciAddrFrom
     ctx.scsiId = 0
+    //do not reset attach id here
     ctx.lock.Unlock()
 }
 
@@ -244,6 +247,14 @@ func (ctx* QemuContext) nextPciAddr() int {
     ctx.pciAddr ++
     ctx.lock.Unlock()
     return addr
+}
+
+func (ctx* QemuContext) nextAttachId() uint64 {
+    ctx.lock.Lock()
+    id := ctx.attachId
+    ctx.attachId ++
+    ctx.lock.Unlock()
+    return id
 }
 
 func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {
