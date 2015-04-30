@@ -272,7 +272,6 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 	job.Stdin.Add(inStream)
 	job.Stdout.Add(outStream)
 	job.Stderr.Set(errStream)
-	errOut = outStream
 
 	// Now run the user process in container.
 	job.SetCloseIO(false)
@@ -357,6 +356,17 @@ func postImageCreate(eng *engine.Engine, version version.Version, w http.Respons
 	stdoutBuf := bytes.NewBuffer(nil)
 
 	job.Stdout.Add(stdoutBuf)
+	if err := job.Run(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func postTtyResize(eng *engine.Engine, version version.Version, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := r.ParseForm(); err != nil {
+		return nil
+	}
+	job := eng.Job("tty", r.Form.Get("id"), r.Form.Get("h"), r.Form.Get("w"))
 	if err := job.Run(); err != nil {
 		return err
 	}
@@ -459,6 +469,7 @@ func createRouter(eng *engine.Engine, logging, enableCors bool, corsHeaders stri
 			"/image/create":				   postImageCreate,
 			"/pod/create":					   postPodCreate,
 			"/exec":                           postExec,
+			"/tty/resize":                     postTtyResize,
 		},
 		"DELETE": {
 		},

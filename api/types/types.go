@@ -3,6 +3,7 @@ package types
 const (
     E_OK = iota
     E_SHUTDOWM
+    E_EXEC_FINISH
     E_BUSY
     E_JSON_PARSE_FAIL
     E_CONTEXT_INIT_FAIL

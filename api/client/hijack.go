@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"dvm/api"
-	"dvm/lib/terminal"
+	"dvm/lib/term"
 	"dvm/lib/promise"
 	"dvm/dvmversion"
 )
@@ -77,17 +77,16 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	var (
 		receiveStdout chan error
-		term *terminal.Terminal
+		oldState *term.State
 	)
 
 	if in != nil && setRawTerminal {
-		term, err = terminal.NewWithStdInOut()
+		fmt.Printf("In the Raw Terminal!!!\n")
+		oldState, err = term.SetRawTerminal(cli.inFd)
 		if err != nil {
 			return err
 		}
-		defer term.ReleaseFromStdInOut()
-		prompt := fmt.Sprintf("root@%s: # ", hostname)
-		term.SetPrompt(prompt)
+		defer term.RestoreTerminal(cli.inFd, oldState)
 	}
 
 	if stdout != nil || stderr != nil {
@@ -95,19 +94,12 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			defer func() {
 				if in != nil {
 					if setRawTerminal {
-						term.ReleaseFromStdInOut()
+						term.RestoreTerminal(cli.inFd, oldState)
 					}
 				}
 			}()
 
-			for {
-				line := make([]byte, 1024)
-				_, err := br.Read(line)
-				if err == io.EOF {
-					break
-				}
-				term.Write(line)
-			}
+			_, err = io.Copy(stdout, br)
 			fmt.Printf("[hijack] End of stdout\n")
 			return err
 		})
@@ -115,22 +107,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 
 	sendStdin := promise.Go(func() error {
 		if in != nil {
-			line , err := term.ReadLine()
-			for {
-				if err == io.EOF {
-					term.Write([]byte(line))
-					fmt.Println()
-					break
-				}
-				if (err != nil && strings.Contains(err.Error(), "control-c break")) || len(line) == 0{
-					line, err = term.ReadLine()
-				} else {
-					//term.Write([]byte(line+"\r\n"))
-					io.Copy(rwc, strings.NewReader(line+"\r\n"))
-					line, err = term.ReadLine()
-				}
-			}
-			io.Copy(rwc, strings.NewReader("exit\r\n"))
+			io.Copy(rwc, in)
 			fmt.Printf("[hijack] End of stdin\n")
 		}
 
@@ -138,13 +115,6 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			CloseWrite() error
 		}); ok {
 			if err := conn.CloseWrite(); err != nil {
-				fmt.Printf("Couldn't send EOF: %s", err.Error())
-			}
-		}
-		if conn, ok := rwc.(interface {
-			CloseRead() error
-		}); ok {
-			if err := conn.CloseRead(); err != nil {
 				fmt.Printf("Couldn't send EOF: %s", err.Error())
 			}
 		}
@@ -157,6 +127,7 @@ func (cli *DvmClient) hijack(method, path string, setRawTerminal bool, in io.Rea
 			fmt.Printf("Error receiveStdout: %s\n", err.Error())
 			return err
 		}
+		sendStdin <- nil
 	}
 	if in != nil {
 		if err := <-sendStdin ; err != nil {

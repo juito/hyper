@@ -2,12 +2,11 @@ package daemon
 
 import (
 	"fmt"
-	"io"
-	"bufio"
 	"strings"
 	"dvm/engine"
 	"dvm/lib/glog"
 	"dvm/api/qemu"
+	"dvm/api/types"
 )
 
 func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
@@ -38,98 +37,48 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		return err
 	}
 	var (
-		stop = make(chan bool, 1)
-		input = make(chan string, 1)
-		cStdout io.Writer
-		cStdin  io.ReadCloser
-		ttyIO *qemu.TtyIO
-		ttyIOChan = make(chan *qemu.TtyIO, 1)
+		ttyIO qemu.TtyIO
+		qemuCallback = make(chan *types.QemuResponse, 1)
+		qemuResponse *types.QemuResponse
+		sequence   uint64
 	)
-	defer close(stop)
-	defer close(input)
-	defer close(ttyIOChan)
+
+	ttyIO.Stdin = job.Stdin
+	ttyIO.Stdout = job.Stdout
+
 	var attachCommand = &qemu.AttachCommand {
-		Callback: ttyIOChan,
+		Streams: &ttyIO,
+		Size:    nil,
+		Callback: qemuCallback,
 	}
 	if typeKey == "pod" {
 		attachCommand.Container = ""
 	} else {
 		attachCommand.Container = typeVal
 	}
-	qemuEvent, _, err := daemon.GetQemuChan(string(vmid))
+	qemuEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
 	if err != nil {
 		return err
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-attachCommand
-	ttyIO = <-ttyIOChan
+	attachResponse := <-qemuCallback
+	sequence = attachResponse.Data.(uint64)
 
 	execCommand := &qemu.ExecCommand {
+		Sequence: sequence,
 		Command: strings.Split(command, " "),
-		Container: "",
+		Container: attachCommand.Container,
 	}
 	qemuEvent.(chan qemu.QemuEvent) <-execCommand
 
-	r, w := io.Pipe()
-	go func() {
-		defer w.Close()
-		defer glog.V(1).Info("Close the io Pipe!")
-		io.Copy(w, job.Stdin)
-	} ()
-	cStdin = r
-	cStdout = job.Stdout
-	go func() {
-		for {
-			select {
-			case output := <-ttyIO.Output:
-				glog.V(1).Infof("%s", output)
-				fmt.Fprintf(cStdout, "%s\n", output)
-			case <-stop:
-				return
-			}
-		}
-	} ()
-
-
-	go func () {
-		for {
-			reader := bufio.NewReader(cStdin)
-			data, _, _ := reader.ReadLine()
-			command := string(data)
-			if command == "" {
-				continue
-			}
-			glog.V(1).Infof("command from client : %s!", command)
-			input <- command
-			if command == "exit" {
-				break
-			}
-		}
-	} ()
-
 	for {
-		select {
-		case <-stop:
-			glog.V(1).Info("The output program is stopped!")
-		case command := <-input:
-			glog.Infof("find a command, %s", command)
-			if command != "" {
-				if command == "exit" {
-					stop <- true
-					return nil
-				} else {
-					ttyIO.Input <- command +"\015"
-				}
-			}
+		qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
+		if qemuResponse.Data == sequence {
+			break
 		}
 	}
-	var detachCommand = &qemu.DetachCommand {
-		Tty: ttyIO,
-	}
-	if typeKey == "pod" {
-		detachCommand.Container = ""
-	} else {
-		detachCommand.Container = typeVal
-	}
-	qemuEvent.(chan qemu.QemuEvent) <-detachCommand
+	defer func() {
+		glog.V(2).Info("Defer function for exec!")
+	} ()
 	return nil
 }

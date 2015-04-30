@@ -9,9 +9,16 @@ import (
 	"io/ioutil"
 	"net/http"
 	"strings"
+	"os"
+	"os/signal"
+	"syscall"
+	"net/url"
+	"strconv"
+
 
 	"dvm/api"
 	"dvm/dvmversion"
+	"dvm/lib/term"
 )
 
 var (
@@ -148,4 +155,45 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 		return nil, -1, err
 	}
 	return body, statusCode, nil
+}
+
+func (cli *DvmClient) resizeTty(id string) {
+	height, width := cli.getTtySize()
+	if height == 0 && width == 0 {
+		return
+	}
+	v := url.Values{}
+	v.Set("h", strconv.Itoa(height))
+	v.Set("w", strconv.Itoa(width))
+	v.Set("id", id)
+
+	if _, _, err := readBody(cli.call("POST", "/tty/resize?"+v.Encode(), nil, nil)); err != nil {
+		fmt.Printf("Error resize: %s", err.Error())
+	}
+}
+func (cli *DvmClient) monitorTtySize(id string) error {
+	cli.resizeTty(id)
+
+	sigchan := make(chan os.Signal, 1)
+	signal.Notify(sigchan, syscall.SIGWINCH)
+	go func() {
+		for _ = range sigchan {
+			cli.resizeTty(id)
+		}
+	}()
+	return nil
+}
+
+func (cli *DvmClient) getTtySize() (int, int) {
+	if !cli.isTerminalOut {
+		return 0, 0
+	}
+	ws, err := term.GetWinsize(cli.outFd)
+	if err != nil {
+		fmt.Printf("Error getting size: %s", err.Error())
+		if ws == nil {
+			return 0, 0
+		}
+	}
+	return int(ws.Height), int(ws.Width)
 }

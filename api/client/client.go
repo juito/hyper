@@ -12,6 +12,7 @@ import (
 	"strings"
 	"text/template"
 	"time"
+	"dvm/lib/term"
 )
 
 type DvmClient struct {
@@ -21,6 +22,10 @@ type DvmClient struct {
 	in         io.ReadCloser
 	out        io.Writer
 	err        io.Writer
+	inFd uintptr
+	outFd uintptr
+	isTerminalIn bool
+	isTerminalOut bool
 	tlsConfig	*tls.Config
 	transport     *http.Transport
 }
@@ -69,6 +74,10 @@ func (cli *DvmClient) Cmd(args ...string) error {
 
 func NewDvmClient(proto, addr string, tlsConfig *tls.Config) *DvmClient {
 	var (
+		inFd          uintptr
+		outFd         uintptr
+		isTerminalIn  = false
+		isTerminalOut = false
 		scheme        = "http"
 	)
 
@@ -94,12 +103,19 @@ func NewDvmClient(proto, addr string, tlsConfig *tls.Config) *DvmClient {
 		tran.Dial = (&net.Dialer{Timeout: timeout}).Dial
 	}
 
+	inFd, isTerminalIn = term.GetFdInfo(os.Stdin)
+	outFd, isTerminalOut = term.GetFdInfo(os.Stdout)
+
 	return &DvmClient {
 		proto:         proto,
 		addr:          addr,
 		in:            os.Stdin,
 		out:           os.Stdout,
 		err:           os.Stdout,
+		inFd:          inFd,
+		outFd:         outFd,
+		isTerminalIn:  isTerminalIn,
+		isTerminalOut: isTerminalOut,
 		scheme:        scheme,
 		transport:     tran,
 	}

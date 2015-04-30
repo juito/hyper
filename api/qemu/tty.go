@@ -8,21 +8,28 @@ import (
     "strconv"
     "os"
     "time"
+    "sync"
+    "errors"
 )
 
+type WindowSize struct {
+    Row         uint16 `json:"row"`
+    Column      uint16 `json:"column"`
+}
+
 type TtyIO struct {
-    Output chan string
-    Input  chan interface{}
+    Stdin   io.ReadCloser
+    Stdout  io.WriteCloser
 }
 
 type ttyContext struct {
     socketName  string
     vmConn      net.Conn
-    observers   []chan string
-    command     chan interface{}
+    subscribers map[uint64]*TtyIO
+    lock        *sync.Mutex
 }
 
-func setupTty(name string, conn *net.UnixConn, input chan interface{}, tn bool) *ttyContext {
+func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {
     var c net.Conn = conn
     if tn == true {
         tc,err := telnet.NewConn(conn)
@@ -34,124 +41,172 @@ func setupTty(name string, conn *net.UnixConn, input chan interface{}, tn bool) 
         c = tc
     }
 
-    return &ttyContext{
+    ttyc := &ttyContext{
         socketName: name,
         vmConn:     c,
-        observers:  []chan string{},
-        command:    input,
+        subscribers:make(map[uint64]*TtyIO),
+        lock:       &sync.Mutex{},
     }
+
+    ttyc.connect(0, initIO)
+    go ttyReceive(ttyc)
+
+    return ttyc
 }
 
-func (tc *ttyContext) Get() *TtyIO {
-    ob := make(chan string, 128)
-    tc.observers = append(tc.observers, ob)
-    return &TtyIO{
-        Output: ob,
-        Input:  tc.command,
-    }
-}
-
-func (tc *ttyContext) start() {
-    go ttyReceiver(tc)
-    go ttyController(tc)
-}
-
-func (tc *ttyContext) Drop(tty *TtyIO) {
-    obs := []chan string{}
-    var tbc chan string = nil
-    for _,ob := range tc.observers {
-        if ob == tty.Output {
-            glog.V(1).Info(tc.socketName, " close unused tty channel")
-            tbc = ob
-        } else {
-            obs = append(obs, ob)
-        }
-    }
-    if tbc != nil {
-        tc.observers = obs
-        close(tbc)
-    }
-}
-
-func (tc *ttyContext) closeObservers() {
-    glog.V(1).Info("close all observer channels")
-    for _,c := range tc.observers {
-        close(c)
-    }
-}
-
-func (tc *ttyContext) sendMessage(msg string) {
-    for i,c := range tc.observers {
-        select {
-        case c <- msg:
-            glog.V(4).Infof("%s msg sent to #%d observer", tc.socketName, i)
-        default:
-            glog.V(4).Infof("%s msg not sent to #%d observer", tc.socketName, i)
-        }
-    }
-}
-
-func ttyReceiver(tc *ttyContext) {
-    buf := make([]byte, 1)
-
-    line := []byte{}
+func ttyReceive(tc *ttyContext) {
+    buf:= make([]byte, 1)
     for {
-        _,err := tc.vmConn.Read(buf)
-        if err == io.EOF {
-            glog.Info(tc.socketName, " The end of tty")
-            tc.closeObservers()
-            tc.command <- io.EOF
-            return
-        } else if err != nil {
-            glog.Warning(tc.socketName, "Unhandled error ", err.Error())
-            tc.closeObservers()
-            tc.command <- io.EOF
+        nr,err := tc.vmConn.Read(buf)
+        if err != nil {
+            glog.Error("reader exit... ", err.Error())
             return
         }
 
-        if buf[0] == '\n' && len(line) > 0 {
-            msg := string(line[:len(line)-1])
-            glog.V(4).Infof("[%s] %s", tc.socketName, msg)
-            tc.sendMessage(msg)
-            line = []byte{}
-        } else {
+        closed := []uint64{}
+        for aid,rd := range tc.subscribers {
+            if rd.Stdout == nil {
+                continue
+            }
+            _,err := rd.Stdout.Write(buf[:nr])
+            if err != nil {
+                glog.V(0).Info("Writer close ", err.Error())
+                closed = append(closed, aid)
+                continue
+            }
+        }
+
+        if len(closed) > 0 {
+            for _,aid := range closed {
+                tc.closeTerm(aid)
+            }
+        }
+    }
+}
+
+func (tc *ttyContext) hasAttachId(attach_id uint64) bool {
+    tc.lock.Lock()
+    defer tc.lock.Unlock()
+    for id,_ := range tc.subscribers {
+        if id == attach_id {
+            return true
+        }
+    }
+    return false
+}
+
+func (tc *ttyContext) findAndClose(attach_id uint64) bool {
+    found := tc.hasAttachId(attach_id)
+    if found {
+        tc.closeTerm(attach_id)
+    }
+    return found
+}
+
+func (tc *ttyContext) closeTerm(attach_id uint64) {
+    tc.lock.Lock()
+    if tty,ok := tc.subscribers[attach_id]; ok {
+        if tty.Stdin != nil {
+            tty.Stdin.Close()
+        }
+        if tty.Stdout != nil {
+            tty.Stdout.Close()
+        }
+        delete(tc.subscribers, attach_id)
+    }
+    tc.lock.Unlock()
+}
+
+func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
+
+    if _,ok := tc.subscribers[attach_id]; ok {
+        glog.Errorf("%d has already attached in this tty, cannot connected", attach_id)
+        return errors.New("repeat attach a same attach id")
+    }
+
+    tc.lock.Lock()
+    tc.subscribers[attach_id] = tty
+    tc.lock.Unlock()
+
+    if tty.Stdin != nil {
+        go func() {
+            buf := make([]byte, 1)
+            defer tc.closeTerm(attach_id)
+            for {
+                nr,err := tty.Stdin.Read(buf)
+                if err != nil {
+                    glog.Info("a stdin closed, ", err.Error())
+                    return
+                } else if nr == 1 && buf[0] == ExitChar {
+                    glog.Info("got stdin detach char, exit term")
+                    return
+                }
+                _,err = tc.vmConn.Write(buf[:nr])
+                if err != nil {
+                    glog.Info("vm connection closed, close reader tty, ", err.Error())
+                    return
+                }
+            }
+        }()
+    }
+
+    return nil
+}
+
+func DropAllTty() *TtyIO {
+    r,w := io.Pipe()
+    go func(){
+        buf := make([]byte, 256)
+        for {
+            _,err := r.Read(buf)
+            if err != nil {
+                return
+            }
+        }
+    }()
+    return &TtyIO{
+        Stdin:  nil,
+        Stdout: w,
+    }
+}
+
+func LinerTty(output chan string) *TtyIO {
+    r,w := io.Pipe()
+    go ttyLiner(r, output)
+    return &TtyIO{
+        Stdin:  nil,
+        Stdout: w,
+    }
+}
+
+func ttyLiner(conn io.Reader, output chan string) {
+    buf     := make([]byte, 1)
+    line    := []byte{}
+    cr      := false
+    emit    := false
+    for {
+
+        nr,err := conn.Read(buf)
+        if err != nil || nr < 1 {
+            glog.V(1).Info("Input byte chan closed, close the output string chan")
+            close(output)
+            return
+        }
+        switch buf[0] {
+            case '\n':
+            emit = !cr
+            cr = false
+            case '\r':
+            emit = true
+            cr = true
+            default:
+            cr = false
             line = append(line, buf[0])
         }
-    }
-}
-
-func ttyController(tc *ttyContext) {
-    looping := true
-    for looping {
-        msg,ok := <- tc.command
-        if ok {
-            switch msg.(type) {
-                case string:
-                    glog.V(2).Infof("%s Write msg to tty %q", tc.socketName, msg.(string))
-                    _,err := tc.vmConn.Write([]byte(msg.(string)))
-                    if err != nil {
-                        glog.Error(tc.socketName, " tty write failed: ", err.Error())
-                        looping = false
-                        tc.vmConn.Close()
-                    }
-                case byte:
-                    glog.V(2).Infof("%s Write byte msg to tty %d", tc.socketName, msg.(byte))
-                    _,err := tc.vmConn.Write([]byte{msg.(byte)})
-                    if err != nil {
-                        glog.Error(tc.socketName, " tty write byte failed: ", err.Error())
-                        looping = false
-                        tc.vmConn.Close()
-                    }
-                case error:
-                    if msg.(error) == io.EOF {
-                        glog.Info(tc.socketName, " tty receive close signal")
-                        looping = false
-                        tc.vmConn.Close()
-                    }
-            }
-        } else {
-            glog.Info(tc.socketName, " channel closed, quit.")
-            looping = false
+        if emit {
+            output <- string(line)
+            line = []byte{}
+            emit = false
         }
     }
 }
@@ -179,8 +234,7 @@ func attachSerialPort(ctx *QemuContext, index,addr int) {
 }
 
 func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
-    tc := setupTty(sockName, conn, make(chan interface{}), true)
-    tc.start()
+    tc := setupTty(sockName, conn, true, DropAllTty())
 //    directConnectConsole(ctx, sockName, tc)
 
     ctx.hub <- &TtyOpenEvent{
@@ -188,3 +242,4 @@ func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index
         TC:     tc,
     }
 }
+

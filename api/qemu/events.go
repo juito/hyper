@@ -4,6 +4,7 @@ import (
     "net"
     "dvm/api/pod"
     "os"
+    "dvm/api/types"
 )
 
 type QemuEvent interface {
@@ -33,6 +34,7 @@ type ReplacePodCommand struct {
 }
 
 type ExecCommand struct {
+    Sequence  uint64 `json:"sequence"`
     Command []string `json:"cmd"`
     Container string `json:"container,omitempty"`
 }
@@ -41,17 +43,19 @@ type ShutdownCommand struct {}
 
 type AttachCommand struct {
     Container string
-    Callback  chan *TtyIO
-}
-
-type DetachCommand struct{
-    Container string
-    Tty       *TtyIO
+    Streams   *TtyIO
+    Size      *WindowSize
+    Callback  chan *types.QemuResponse
 }
 
 type CommandAck struct {
     reply   uint32
     msg     []byte
+}
+
+type WindowSizeCommand struct {
+    Container   string
+    Size        *WindowSize
 }
 
 type ContainerCreatedEvent struct {
@@ -151,7 +155,7 @@ func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ReplacePodCommand)        Event() int { return COMMAND_REPLACE_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
 func (qe* AttachCommand)            Event() int { return COMMAND_ATTACH }
-func (qe* DetachCommand)            Event() int { return COMMAND_DETACH }
+func (qe* WindowSizeCommand)        Event() int { return COMMAND_WINDOWSIZE }
 func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
 func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
 func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }

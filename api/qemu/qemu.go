@@ -43,14 +43,12 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     glog.V(1).Info("connected to ", ctx.consoleSockName)
 
-    tc := setupTty(ctx.consoleSockName, conn.(*net.UnixConn), make(chan interface{}), true)
-    tty := tc.Get()
-    ctx.consoleTty = tc
-    tc.start()
+    cout := make(chan string, 128)
+    ctx.consoleTty = setupTty(ctx.consoleSockName, conn.(*net.UnixConn), true, LinerTty(cout))
     //directConnectConsole(ctx, ctx.consoleSockName, tc)
 
     for {
-        line,ok := <- tty.Output
+        line,ok := <- cout
         if ok {
             glog.V(1).Info("[console] ", line)
         } else {

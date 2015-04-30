@@ -89,6 +89,25 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     }
 }
 
+func setWindowSize(ctx *QemuContext, container string, size *WindowSize) error {
+    msg, err := json.Marshal(map[string]interface{}{
+        "tty": ctx.Idx2Tty(ctx.Lookup(container)),
+        "row": size.Row,
+        "column": size.Column,
+    })
+    if err != nil {
+        ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+            Cause: fmt.Sprintf("command window size parse failed",),
+        }
+        return err
+    }
+    ctx.vm <- &DecodedMessage{
+        code: INIT_WINSIZE,
+        message: msg,
+    }
+    return nil
+}
+
 func runPod(ctx *QemuContext) {
     pod,err := json.Marshal(*ctx.vmSpec)
     if err != nil {
@@ -346,13 +365,13 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_EXEC:
                 cmd := ev.(*ExecCommand)
                 if ctx.transition != nil {
-                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running",}
+                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running", Data: cmd.Sequence,}
                     return
                 }
                 pkg,err := json.Marshal(*cmd)
                 if err != nil {
                     ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
-                        Cause: fmt.Sprintf("command %s parse failed", cmd.Command,),
+                        Cause: fmt.Sprintf("command %s parse failed", cmd.Command,), Data: cmd.Sequence,
                     }
                     return
                 }
@@ -361,6 +380,9 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                     code: INIT_EXECCMD,
                     message: pkg,
                 }
+            case COMMAND_WINDOWSIZE:
+                cmd := ev.(*WindowSizeCommand)
+                setWindowSize(ctx, cmd.Container, cmd.Size)
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_EXECCMD {
@@ -371,23 +393,34 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if cmd.Container == "" { //console
-                    glog.V(1).Info("Allocating vm console tty.")
-                    cmd.Callback <- ctx.consoleTty.Get()
-                } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
-                    glog.V(1).Info("Allocating tty for ", cmd.Container)
-                    tc := ctx.devices.ttyMap[idx]
-                    cmd.Callback <- tc.Get()
+                id  := ctx.nextAttachId()
+                var err error = nil
+                if cmd.Size != nil {
+                    setWindowSize(ctx, cmd.Container, cmd.Size)
                 }
-            case COMMAND_DETACH:
-                cmd := ev.(*DetachCommand)
-                if cmd.Container == "" {
-                    glog.V(1).Info("Drop vm console tty.")
-                    ctx.consoleTty.Drop(cmd.Tty)
+                if cmd.Container == "" { //console
+                    glog.V(1).Info("Connecting vm console tty.")
+                    tc := ctx.consoleTty
+                    err = tc.connect(id, cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
-                    glog.V(1).Info("Drop tty for ", cmd.Container)
+                    glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    tc.Drop(cmd.Tty)
+                    err = tc.connect(id, cmd.Streams)
+                }
+                if err != nil {
+                    cmd.Callback <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_BUSY,
+                        Cause: err.Error(),
+                        Data: id,
+                    }
+                } else {
+                    cmd.Callback <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_OK,
+                        Cause: "Attached",
+                        Data: id,
+                    }
                 }
             default:
                 glog.Warning("got event during pod running")
