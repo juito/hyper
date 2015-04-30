@@ -34,7 +34,7 @@ type ReplacePodCommand struct {
 }
 
 type ExecCommand struct {
-    Sequence  uint64 `json:"sequence"`
+    Sequence  uint64 `json:"seq"`
     Command []string `json:"cmd"`
     Container string `json:"container,omitempty"`
 }
