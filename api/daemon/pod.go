@@ -59,10 +59,12 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	v.Set("ID", podid)
 	v.SetInt("Code", qemuResponse.Code)
 	v.Set("Cause", qemuResponse.Cause)
-	podData := qemuResponse.Data.(*qemu.RunningPod)
-	for _, c := range podData.Containers {
-		fmt.Printf("c.id = %s\n", c.Id)
-		daemon.SetPodByContainer(c.Id, podid, "", "", make([]string, 0))
+	if qemuResponse.Code == types.E_OK {
+		podData := qemuResponse.Data.(*qemu.RunningPod)
+		for _, c := range podData.Containers {
+			fmt.Printf("c.id = %s\n", c.Id)
+			daemon.SetPodByContainer(c.Id, podid, "", "", make([]string, 0))
+		}
 	}
 	if _, err := v.WriteTo(job.Stdout); err != nil {
 		return err
