@@ -43,6 +43,7 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	var (
 		vmResponse = make([]string, 100)
 		podResponse = make([]string, 100)
+		containerResponse = make([]string, 100)
 	)
 	if remoteInfo.Exists("item") {
 		item = remoteInfo.Get("item")
@@ -56,6 +57,9 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	}
 	if item == "pod" {
 		podResponse = remoteInfo.GetList("podData")
+	}
+	if item == "container" {
+		containerResponse = remoteInfo.GetList("cData")
 	}
 
 	var (
@@ -80,6 +84,17 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 				return err
 			}
 			fmt.Printf("%15s%25s%20s\n", podid, tempPod.Name, vmid)
+		}
+	}
+
+	if item == "container" {
+		fmt.Printf("     Container ID                                                   POD ID          Status\n")
+		for _, c := range containerResponse {
+			fields := strings.Split(c, ":")
+			containerId := fields[0]
+			podId := fields[1]
+			status := fields[2]
+			fmt.Printf("%s%25s%20s\n", containerId, podId, status)
 		}
 	}
 	return nil

@@ -191,16 +191,19 @@ func getList(eng *engine.Engine, version version.Version, w http.ResponseWriter,
 		Item string `json:"item"`
 		PodData  []string `json:"podData"`
 		VmData   []string `json:"vmData"`
+		CData   []string `json:"cData"`
 	}
 	var res listResponse
 	if err := json.Unmarshal([]byte(str), &res); err != nil {
 		return err
 	}
 	glog.V(1).Info("The pod-vm id is %s", res.VmData)
+	glog.V(1).Info("The container id is %s", res.CData)
 	var env engine.Env
 	env.Set("Item", res.Item)
 	env.SetList("podData", res.PodData)
 	env.SetList("vmData", res.VmData)
+	env.SetList("cData", res.CData)
 	return writeJSONEnv(w, http.StatusOK, env)
 }
 

@@ -23,6 +23,7 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 		err error
 		vmJsonResponse = make([]string, 100)
 		podJsonResponse = make([]string, 100)
+		containerJsonResponse = make([]string, 100)
 		i int
 	)
 	// Prepare the qemu status to client
@@ -64,8 +65,19 @@ func (daemon *Daemon) CmdList(job *engine.Job) error {
 		}
 	}
 
+	var k = 0
+	if item == "container" {
+		for v, c := range daemon.containerList {
+			containerJsonResponse[k] = v+":"+c.PodId+":"+c.Status
+			k ++
+		}
+	}
+
 	v.SetList("vmData", vmJsonResponse[:i])
 	v.SetList("podData", podJsonResponse[:j])
+	if item == "container" {
+		v.SetList("cData", containerJsonResponse[:k])
+	}
 	if _, err := v.WriteTo(job.Stdout); err != nil {
 		return err
 	}

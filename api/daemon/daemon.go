@@ -113,11 +113,13 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	dockerCli := docker.NewDockerCli("", proto, addr, nil)
 	qemuchan := make(map[string]interface{}, 100)
 	qemuclient := make(map[string]interface{}, 100)
+	cList := make(map[string]*Container, 100)
 	daemon := &Daemon{
 		ID:               string(os.Getpid()),
 		db:               db,
 		eng:              eng,
 		dockerCli:		  dockerCli,
+		containerList:    cList,
 		qemuChan:         qemuchan,
 		qemuClientChan:   qemuclient,
 	}
