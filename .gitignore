@@ -25,6 +25,6 @@ _testmain.go
 
 # intellij idea configure
 .idea
-daemon
-dvmcli
+/daemon
+/dvmcli
 *.out

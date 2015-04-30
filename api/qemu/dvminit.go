@@ -112,10 +112,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
             glog.Info("vm channel closed, quit")
             break
         }
-        if cmd.code == INIT_DESTROYPOD {
-            glog.Info("Sending destroy pod command, last round of command to init")
-            looping = false
-        } else if cmd.code == INIT_ACK {
+        if cmd.code == INIT_ACK {
             if len(cmds) > 0 {
                 ctx.hub <- &CommandAck{
                     reply: cmds[0].code,
@@ -126,7 +123,7 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
                 glog.Error("got ack but no command in queue")
             }
         } else{
-            if cmd.code == INIT_SHUTDOWN {
+            if cmd.code == INIT_DESTROYPOD {
                 glog.Info("Sending shutdown command, last round of command to init")
                 looping = false
             }
