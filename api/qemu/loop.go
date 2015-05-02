@@ -428,12 +428,13 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if !ctx.userSpec.Tty {
+                if !ctx.userSpec.Tty && cmd.Container != "" {
+                    glog.Warning("trying to attach a container, but do not has tty")
                     cmd.Callback <- &types.QemuResponse{
                         VmId: ctx.id,
                         Code: types.E_NO_TTY,
                         Cause: "tty is not configured",
-                        Data: 0,
+                        Data: uint64(0),
                     }
                 }
                 id  := ctx.nextAttachId()

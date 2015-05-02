@@ -9,5 +9,6 @@
 	    "memory": 512
 	},
 	"files": [],
-	"volumes": []
+	"volumes": [],
+	"tty": true
 }
