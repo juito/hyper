@@ -441,7 +441,22 @@ func (ctx *QemuContext) releaseVolumeDir() {
             glog.V(1).Info("need umount dir ", vol.info.filename)
             ctx.progress.deleting.volumes[name] = true
             go UmountVolume(ctx.shareDir, vol.info.filename, name, ctx.hub)
-        } else {
+        }
+    }
+}
+
+func (ctx *QemuContext) removeDMDevice() {
+    for name,container := range ctx.devices.imageMap {
+        if container.info.fstype != "dir" {
+            glog.V(1).Info("need remove dm file", container.info.filename)
+            ctx.progress.deleting.blockdevs[name] = true
+            go UmountDMDevice(container.info.filename, name, ctx.hub)
+        }
+    }
+    for name,vol := range ctx.devices.volumeMap {
+        if vol.info.fstype != "dir" {
+            glog.V(1).Info("need remove dm file ", vol.info.filename)
+            ctx.progress.deleting.blockdevs[name] = true
             go UmountDMDevice(vol.info.filename, name, ctx.hub)
         }
     }

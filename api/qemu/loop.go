@@ -32,6 +32,7 @@ func removeDevice(ctx *QemuContext) {
 
     ctx.releaseVolumeDir()
     ctx.releaseAufsDir()
+    ctx.removeDMDevice()
 
     for idx,tty := range ctx.devices.ttyMap {
         glog.V(1).Infof("remove %d tty sock: %s", idx, tty.socketName)
@@ -222,6 +223,15 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
                     glog.V(1).Infof("container %d umounted", c.Index)
                     delete(ctx.progress.deleting.containers, c.Index)
                 }
+                if ctx.vmSpec.Containers[c.Index].Fstype != "dir" {
+                    for name,image := range ctx.devices.imageMap {
+                        if image.pos == c.Index {
+                            glog.V(1).Info("need remove image dm file", image.info.filename)
+                            ctx.progress.deleting.blockdevs[name] = true
+                            go UmountDMDevice(image.info.filename, name, ctx.hub)
+                        }
+                    }
+                }
             }
         case EVENT_INTERFACE_DELETE:
             nic := ev.(*InterfaceReleased)
@@ -238,7 +248,7 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
                     delete(ctx.progress.deleting.networks, nic.Index)
                 }
             }
-        case EVENT_VOLUME_DELETE:
+        case EVENT_BLOCK_EJECTED:
             v := ev.(*VolumeUnmounted)
             if !v.Success && ctx.transition != nil {
                 ctx.client <- &types.QemuResponse{
@@ -251,6 +261,27 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
                 if _, ok := ctx.progress.deleting.volumes[v.Name]; ok {
                     glog.V(1).Infof("volume %s umounted", v.Name)
                     delete(ctx.progress.deleting.volumes, v.Name)
+                }
+                vol := ctx.devices.volumeMap[v.Name]
+                if vol.info.fstype != "dir" {
+                    glog.V(1).Info("need remove dm file ", vol.info.filename)
+                    ctx.progress.deleting.blockdevs[vol.info.name] = true
+                    go UmountDMDevice(vol.info.filename, vol.info.name, ctx.hub)
+                }
+            }
+        case EVENT_VOLUME_DELETE:
+            v := ev.(*BlockdevRemovedEvent)
+            if !v.Success && ctx.transition != nil {
+                ctx.client <- &types.QemuResponse{
+                    VmId: ctx.id,
+                    Code: types.E_INIT_FAIL,
+                    Cause: "unplug blockdev failed",
+                }
+                ctx.hub <- &ShutdownCommand{}
+            } else {
+                if _, ok := ctx.progress.deleting.blockdevs[v.Name]; ok {
+                    glog.V(1).Infof("blockdev %s deleted", v.Name)
+                    delete(ctx.progress.deleting.blockdevs, v.Name)
                 }
             }
         case EVENT_SERIAL_DELETE:

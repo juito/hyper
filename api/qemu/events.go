@@ -95,6 +95,11 @@ type BlockdevInsertedEvent struct {
     ScsiId      int
 }
 
+type BlockdevRemovedEvent struct {
+    Name        string
+    Success     bool
+}
+
 type InterfaceCreated struct {
     Index       int
     PCIAddr     int
@@ -151,25 +156,26 @@ type Interrupted struct {
 func (qe* QemuExitEvent)            Event() int { return EVENT_QEMU_EXIT }
 func (qe* QemuTimeout)              Event() int { return EVENT_QEMU_TIMEOUT }
 func (qe* InitConnectedEvent)       Event() int { return EVENT_INIT_CONNECTED }
+func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
+func (qe* ContainerUnmounted)       Event() int { return EVENT_CONTAINER_DELETE }
+func (qe* VolumeUnmounted)          Event() int { return EVENT_BLOCK_EJECTED }
+func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
+func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
+func (qe* BlockdevRemovedEvent)     Event() int { return EVENT_VOLUME_DELETE }
+func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
+func (qe* InterfaceReleased)        Event() int { return EVENT_INTERFACE_DELETE }
+func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
+func (qe* NetDevRemovedEvent)       Event() int { return EVENT_INTERFACE_EJECTED }
+func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
+func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
+func (qe* SerialDelEvent)           Event() int { return EVENT_SERIAL_DELETE }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ReplacePodCommand)        Event() int { return COMMAND_REPLACE_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }
 func (qe* AttachCommand)            Event() int { return COMMAND_ATTACH }
 func (qe* WindowSizeCommand)        Event() int { return COMMAND_WINDOWSIZE }
-func (qe* ContainerCreatedEvent)    Event() int { return EVENT_CONTAINER_ADD }
-func (qe* VolumeReadyEvent)         Event() int { return EVENT_VOLUME_ADD }
-func (qe* BlockdevInsertedEvent)    Event() int { return EVENT_BLOCK_INSERTED }
-func (qe* CommandAck)               Event() int { return COMMAND_ACK }
-func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
-func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
-func (qe* NetDevRemovedEvent)       Event() int { return EVENT_INTERFACE_EJECTED }
 func (qe* ShutdownCommand)          Event() int { return COMMAND_SHUTDOWN }
+func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
-func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
-func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
-func (qe* SerialDelEvent)           Event() int { return EVENT_SERIAL_DELETE }
 func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }
 func (qe* Interrupted)              Event() int { return ERROR_INTERRUPTED }
-func (qe* InterfaceReleased)        Event() int { return EVENT_INTERFACE_DELETE }
-func (qe* VolumeUnmounted)          Event() int { return EVENT_VOLUME_DELETE }
-func (qe* ContainerUnmounted)       Event() int { return EVENT_CONTAINER_DELETE }

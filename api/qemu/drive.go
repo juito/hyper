@@ -290,5 +290,5 @@ func UmountDMDevice(deviceFullPath, name string, hub chan QemuEvent) {
 	}
 
 	// After umount that device, we need to delete it
-	hub <-  &VolumeUnmounted{ Name: name, Success:success,}
+	hub <-  &BlockdevRemovedEvent{ Name: name, Success:success,}
 }
