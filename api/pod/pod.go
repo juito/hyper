@@ -196,19 +196,28 @@ type item interface{
     key() string
 }
 
-func keySet(ilist []item) (bool,map[string]bool) {
+func keySet(ilist interface{}) (bool,map[string]bool) {
     iset := make(map[string]bool)
-    for _,x := range ilist {
-        kx := x.key()
-        if _,ok := iset[kx]; ok {
-            return false,iset
+    switch ilist.(type) {
+        case []interface{}:
+        for _,x := range ilist.([]interface{}) {
+            switch x.(type) {
+                case item:
+                kx := x.(item).key()
+                if _,ok := iset[kx]; ok {
+                    return false,iset
+                }
+                iset[kx] = true
+                default:
+                return false,iset
+            }
         }
-        iset[kx] = true
+        return true,iset
+        default: return false, iset
     }
-    return true,iset
 }
 
-func (vol *UserVolume)          key() string {return vol.Name}
-func (vol *UserVolumeReference) key() string {return vol.Volume}
-func (f *UserFile)              key() string {return f.Name}
-func (env *UserEnvironmentVar)  key() string {return env.Env}
+func (vol UserVolume)          key() string {return vol.Name}
+func (vol UserVolumeReference) key() string {return vol.Volume}
+func (f UserFile)              key() string {return f.Name}
+func (env UserEnvironmentVar)  key() string {return env.Env}
