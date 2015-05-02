@@ -6,6 +6,7 @@ import (
     "io/ioutil"
     "crypto/rand"
     "encoding/json"
+    "errors"
 )
 
 // Pod Data Structure
@@ -147,3 +148,66 @@ func RandStr(strSize int, randType string) string {
     }
     return string(bytes)
 }
+
+//validate
+// 1. volume name, file name is unique
+// 2. source mount to only one pos in one container
+// 3. container should not use volume/file not in volume/file list
+// 4. environment var should be uniq in one container
+func (pod *UserPod) Validate() error {
+    uniq,vset := keySet(pod.Volumes)
+    if !uniq {
+        return errors.New("Volumes name does not unique")
+    }
+
+    uniq,fset := keySet(pod.Files)
+    if !uniq {
+        return errors.New("Files name does not unique")
+    }
+
+    for idx,container := range pod.Containers {
+
+        if uniq,_ := keySet(container.Volumes);!uniq {
+            return fmt.Errorf("in container %d, volume source are not unique", idx)
+        }
+
+        if uniq,_ := keySet(container.Envs);!uniq {
+            return fmt.Errorf("in container %d, environment name are not unique", idx)
+        }
+
+        for _,f := range container.Files {
+            if _,ok := fset[f.Filename]; !ok {
+                return fmt.Errorf("in container %d, file %s does not exist in file list.", idx, f.Filename)
+            }
+        }
+
+        for _,v := range container.Volumes {
+            if _,ok := vset[v.Volume]; !ok {
+                return fmt.Errorf("in container %d, volume %s does not exist in file list.", idx, v.Volume)
+            }
+        }
+    }
+
+    return nil
+}
+
+type item interface{
+    key() string
+}
+
+func keySet(ilist []item) (bool,map[string]bool) {
+    iset := make(map[string]bool)
+    for i,x := range ilist {
+        kx := x.key()
+        if _,ok := iset[kx]; ok {
+            return false,iset
+        }
+        iset[kx] = true
+    }
+    return true,iset
+}
+
+func (vol *UserVolume)          key() string {return vol.Name}
+func (vol *UserVolumeReference) key() string {return vol.Volume}
+func (f *UserFile)              key() string {return f.Name}
+func (env *UserEnvironmentVar)  key() string {return env.Env}

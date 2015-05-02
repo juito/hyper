@@ -98,11 +98,3 @@ func (p *VmPod) runningInfo() *RunningPod {
         Containers: containers,
     }
 }
-
-//validate
-// 1. volume name, file name is unique
-// 2. source mount to only one pos in one container
-// 3. container should not use volume not in volume list
-func ValidateUserPod(spec *pod.UserPod) error {
-    return nil
-}
