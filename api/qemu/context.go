@@ -606,8 +606,10 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
         }
 
         ctx.progress.adding.containers[i] = true
-        ctx.progress.adding.ttys[i] = true
-        ctx.progress.adding.serialPorts[i] = true
+        if ctx.userSpec.Tty {
+            ctx.progress.adding.ttys[i] = true
+            ctx.progress.adding.serialPorts[i] = true
+        }
     }
 
     ctx.vmSpec = &VmPod{

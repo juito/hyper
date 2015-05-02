@@ -5,6 +5,7 @@ const (
     E_SHUTDOWM
     E_EXEC_FINISH
     E_BUSY
+    E_NO_TTY
     E_JSON_PARSE_FAIL
     E_CONTEXT_INIT_FAIL
     E_DEVICE_FAIL

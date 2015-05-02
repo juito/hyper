@@ -6,6 +6,7 @@
 - `containers`: the container to be run in dvm, described in correspond section.
 - `files`: files would be written in one or more containers, described in correspond section.
 - `volumes`: file or dir will be mapped into one or more containers, described in correspond section.
+- `tty`: enable tty connection to pod, default: `true`
 
 example:
 
@@ -28,7 +29,8 @@ example:
 	        "uri": "https://s3.amazonaws/bucket/file.conf",
 	        "content": ""
 	    }],
-        "volumes": []
+        "volumes": [],
+        "tty": true,
     }
 
 

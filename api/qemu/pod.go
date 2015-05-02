@@ -1,12 +1,5 @@
 package qemu
 
-import (
-    "dvm/api/pod"
-)
-
-const (
-)
-
 //change first letter to uppercase and add json tag (thanks GNU sed):
 //  gsed -ie 's/^    \([a-z]\)\([a-zA-Z]*\)\( \{1,\}[^ ]\{1,\}.*\)$/    \U\1\E\2\3 `json:"\1\2"`/' pod.go
 
@@ -37,7 +30,7 @@ type VmContainer struct {
     Image   string `json:"image"`
     Volumes []VmVolumeDescriptor `json:"volumes,omitempty"`
     Fsmap   []VmFsmapDescriptor `json:"fsmap,omitempty"`
-    Tty     string `json:"tty"`
+    Tty     string `json:"tty,omitempty"`
     Workdir string `json:"workdir"`
     Entrypoint []string `json:"-"`
     Cmd     []string `json:"cmd"`

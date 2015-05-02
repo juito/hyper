@@ -78,9 +78,11 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
             go CreateInterface(i, addr, name, i == 0, ctx.hub)
         }
     }
-    for i:=0; i < len(ctx.userSpec.Containers); i++ {
-        addr := ctx.nextPciAddr()
-        go attachSerialPort(ctx, i, addr)
+    if ctx.userSpec.Tty {
+        for i:=0; i < len(ctx.userSpec.Containers); i++ {
+            addr := ctx.nextPciAddr()
+            go attachSerialPort(ctx, i, addr)
+        }
     }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
@@ -382,7 +384,9 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_WINDOWSIZE:
                 cmd := ev.(*WindowSizeCommand)
-                setWindowSize(ctx, cmd.Container, cmd.Size)
+                if ctx.userSpec.Tty {
+                    setWindowSize(ctx, cmd.Container, cmd.Size)
+                }
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
                 if ack.reply == INIT_EXECCMD {
@@ -393,6 +397,14 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
+                if !ctx.userSpec.Tty {
+                    cmd.Callback <- &types.QemuResponse{
+                        VmId: ctx.id,
+                        Code: types.E_NO_TTY,
+                        Cause: "tty is not configured",
+                        Data: 0,
+                    }
+                }
                 id  := ctx.nextAttachId()
                 var err error = nil
                 if cmd.Size != nil {
