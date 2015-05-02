@@ -197,7 +197,7 @@ type item interface{
 
 func keySet(ilist []item) (bool,map[string]bool) {
     iset := make(map[string]bool)
-    for i,x := range ilist {
+    for _,x := range ilist {
         kx := x.key()
         if _,ok := iset[kx]; ok {
             return false,iset
