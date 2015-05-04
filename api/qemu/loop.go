@@ -75,29 +75,32 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
 }
 
 func setWindowSize(ctx *QemuContext, tag string, size *WindowSize) error {
-    cmd := map[string]interface{}{
-        "row": size.Row,
-        "column": size.Column,
-    }
-    switch ctx.ttySessions[tag].(type) {
-        case uint64:
-            cmd["seq"] = ctx.ttySessions[tag].(uint64)
-        default:
-            glog.Error("cannot resolve client tag ", tag)
-            return nil
-    }
-    msg, err := json.Marshal(cmd)
-    if err != nil {
-        ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
-            Cause: fmt.Sprintf("command window size parse failed",),
+    if session,ok := ctx.ttySessions[tag] ; ok {
+        cmd := map[string]interface{}{
+            "seq": session,
+            "row": size.Row,
+            "column": size.Column,
+        }
+        msg, err := json.Marshal(cmd)
+        if err != nil {
+            ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+                Cause: fmt.Sprintf("command window size parse failed",),
+            }
+            return err
+        }
+        ctx.vm <- &DecodedMessage{
+            code: INIT_WINSIZE,
+            message: msg,
+        }
+        return nil
+    } else {
+        err := fmt.Errorf("cannot resolve client tag %s", tag)
+        glog.Error(err.Error())
+        ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_NO_TTY,
+            Cause: err.Error(),
         }
         return err
     }
-    ctx.vm <- &DecodedMessage{
-        code: INIT_WINSIZE,
-        message: msg,
-    }
-    return nil
 }
 
 func runPod(ctx *QemuContext) {
