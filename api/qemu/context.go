@@ -281,6 +281,9 @@ func (ctx *QemuContext) clientReg(tag string, session interface{}) {
 }
 
 func (ctx *QemuContext) clientDereg(tag string) {
+    if tag == "" {
+        return
+    }
     ctx.lock.Lock()
     if _,ok := ctx.ttySessions[tag]; ok {
         delete(ctx.ttySessions, tag)
@@ -524,6 +527,9 @@ func (ctx *QemuContext) removeImageDrive() {
 }
 
 func (ctx* QemuContext) Lookup(container string) int {
+    if container == "" {
+        return -1
+    }
     for idx,c := range ctx.vmSpec.Containers {
         if c.Id == container {
             glog.V(1).Infof("found container %s at %d", container, idx)

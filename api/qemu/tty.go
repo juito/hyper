@@ -33,9 +33,15 @@ type ttyContext struct {
     lock        *sync.Mutex
 }
 
+type ttyAttachments struct {
+    container   int
+    persistent  bool
+    attachments []*TtyIO
+}
+
 type pseudoTtys struct {
     channel     chan *ttyMessage
-    ttys        map[uint64]*TtyIO
+    ttys        map[uint64]*ttyAttachments
     lock        *sync.Mutex
 }
 
@@ -47,7 +53,7 @@ type ttyMessage struct {
 func newPts() *pseudoTtys {
     return &pseudoTtys{
         channel: make(chan *ttyMessage, 256),
-        ttys: make(map[uint64]*TtyIO),
+        ttys: make(map[uint64]*ttyAttachments),
         lock: &sync.Mutex{},
     }
 }
@@ -127,57 +133,128 @@ func waitPts(ctx *QemuContext) {
             close(ctx.ptys.channel)
             return
         }
-        if tty,ok := ctx.ptys.ttys[res.session]; ok {
+        if ta,ok := ctx.ptys.ttys[res.session]; ok {
             if len(res.message) == 0 {
                 glog.V(1).Infof("session %d closed by peer, close pty", res.session)
                 ctx.ptys.Close(ctx, res.session)
-            } else if tty.Stdout != nil {
-                _,err := tty.Stdout.Write(res.message)
-                if err != nil {
-                    glog.V(1).Infof("fail to write session %d, close pty", res.session)
-                    ctx.ptys.Close(ctx, res.session)
+            } else{
+                for _,tty := range ta.attachments {
+                    if tty.Stdout != nil {
+                        _,err := tty.Stdout.Write(res.message)
+                        if err != nil {
+                            glog.V(1).Infof("fail to write session %d, close pty attachment", res.session)
+                            ctx.ptys.Detach(ctx, res.session, tty)
+                        }
+                    }
                 }
             }
         }
     }
 }
 
-func (pts *pseudoTtys) Close(ctx *QemuContext, session uint64) {
-    if tty,ok := pts.ttys[session]; ok {
-        if tty.Stdin != nil {
-            tty.Stdin.Close()
+func newAttachments(idx int, persist bool) *ttyAttachments {
+    return &ttyAttachments{
+        container: idx,
+        persistent: persist,
+        attachments: []*TtyIO{},
+    }
+}
+
+
+func newAttachmentsWithTty(idx int, persist bool, tty *TtyIO) *ttyAttachments {
+    return &ttyAttachments{
+        container: idx,
+        persistent: persist,
+        attachments: []*TtyIO{tty,},
+    }
+}
+
+func (ta *ttyAttachments) attach(tty *TtyIO) {
+    ta.attachments = append(ta.attachments, tty)
+}
+
+func (ta *ttyAttachments) detach(tty *TtyIO) {
+    at := []*TtyIO{}
+    detached := false
+    for _,t := range ta.attachments {
+        if tty.ClientTag != t.ClientTag {
+            at = append(at, t)
+        } else {
+            detached = true
         }
-        if tty.Stdout != nil {
-            tty.Stdout.Close()
-        }
-        pts.lock.Lock()
-        delete(pts.ttys, session)
-        pts.lock.Unlock()
-        if tty.ClientTag != "" {
-            ctx.clientDereg(tty.ClientTag)
-        }
+    }
+    if detached {
+        ta.attachments = at
+    }
+}
+
+func (ta *ttyAttachments) close() []string {
+    tags := []string{}
+    for _,t := range ta.attachments {
+        tags = append(tags, t.Close())
+    }
+    ta.attachments = []*TtyIO{}
+    return tags
+}
+
+func (ta *ttyAttachments) empty() bool {
+    return len(ta.attachments) == 0
+}
+
+func (tty *TtyIO) Close() string {
+    if tty.Stdin != nil {
+        tty.Stdin.Close()
+    }
+    if tty.Stdout != nil {
+        tty.Stdout.Close()
+    }
+    if tty.Callback != nil {
         tty.Callback <- &types.QemuResponse{
             Code:  types.E_EXEC_FINISH,
             Cause: "Command finished",
-            Data:  session,
+        }
+    }
+    return tty.ClientTag
+}
+
+func (pts *pseudoTtys) Detach(ctx*QemuContext, session uint64, tty *TtyIO) {
+    if ta,ok := ctx.ptys.ttys[session] ; ok {
+        ctx.ptys.lock.Lock()
+        ta.detach(tty)
+        ctx.ptys.lock.Unlock()
+        if !ta.persistent && ta.empty() {
+            ctx.ptys.Close(ctx, session)
+        }
+        ctx.clientDereg(tty.Close())
+    }
+}
+
+func (pts *pseudoTtys) Close(ctx *QemuContext, session uint64) {
+    if ta,ok := pts.ttys[session]; ok {
+        pts.lock.Lock()
+        tags := ta.close()
+        delete(pts.ttys, session)
+        pts.lock.Unlock()
+        for _,t := range tags {
+            ctx.clientDereg(t)
         }
     }
 }
 
-func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) error {
-    if _,ok := pts.ttys[session]; ok {
-        glog.Errorf("%d has already attached", session)
-        return errors.New("repeat attach a same attach id")
-    }
+func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint64, tty *TtyIO) error {
 
     pts.lock.Lock()
-    pts.ttys[session] = tty
+    if ta,ok := pts.ttys[session]; ok {
+        ta.attach(tty)
+    } else {
+        pts.ttys[session] = newAttachmentsWithTty(container, false, tty)
+    }
     pts.lock.Unlock()
 
     if tty.Stdin != nil {
         go func() {
             buf := make([]byte, 1)
-            defer pts.Close(ctx, session)
+            defer pts.Detach(ctx, session, tty)
             for {
                 nr,err := tty.Stdin.Read(buf)
                 if err != nil {

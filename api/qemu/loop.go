@@ -422,7 +422,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                     return
                 }
                 ctx.transition = cmd
-                ctx.ptys.ptyConnect(ctx, cmd.Sequence, cmd.Streams)
+                ctx.ptys.ptyConnect(ctx, ctx.Lookup(cmd.Container), cmd.Sequence, cmd.Streams)
                 ctx.clientReg(cmd.Streams.ClientTag, cmd.Sequence)
                 ctx.vm <- &DecodedMessage{
                     code: INIT_EXECCMD,
