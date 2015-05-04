@@ -366,46 +366,6 @@ func TestQmpNetSession(t *testing.T) {
     t.Log("got net device", info.Address, info.Index, info.DeviceName)
 }
 
-func TestQmpSerialSession(t *testing.T) {
-
-    qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
-
-    go qmpHandler(ctx)
-
-    c := testQmpInitHelper(t, ctx.qmpSockName)
-    defer c.Close()
-
-    time.Sleep(100 * time.Millisecond)
-
-    ctx.qmp <- newSerialPortSession(ctx, ctx.serialPortPrefix + "0.sock", 0)
-
-    buf := make([]byte, 1024)
-    nr,err := c.Read(buf)
-    if err != nil {
-        t.Error("cannot read command 0 in session", err.Error())
-    }
-    t.Log("received ", string(buf[:nr]))
-
-    c.Write([]byte(`{ "return": {}}`))
-
-    nr,err = c.Read(buf)
-    if err != nil {
-        t.Error("cannot read command 1 in session", err.Error())
-    }
-    t.Log("received ", string(buf[:nr]))
-
-    c.Write([]byte(`{ "return": {}}`))
-
-    msg := <- qemuChan
-    if msg.Event() != EVENT_SERIAL_ADD {
-        t.Error("wrong type of message", msg.Event())
-    }
-
-    info := msg.(*SerialAddEvent)
-    t.Log("got serial port ", info.PortName)
-}
-
 func TestSessionQueue(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
     ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)

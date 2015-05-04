@@ -220,14 +220,6 @@ func TestContainerCreated(t *testing.T) {
     }
     ctx.blockdevInserted(bevent)
 
-
-    ctx.ttyOpened(&TtyOpenEvent{
-        Index: 0,
-    })
-    ctx.serialAttached(&SerialAddEvent{
-        Index:0,
-    })
-
     if !ctx.deviceReady() {
         t.Error("after image inserted, it should ready now")
     }
@@ -309,13 +301,6 @@ func TestNetworkCreated(t *testing.T) {
         DeviceName: "eth0",
     }
     ctx.netdevInserted(fevent)
-
-    ctx.ttyOpened(&TtyOpenEvent{
-        Index: 0,
-    })
-    ctx.serialAttached(&SerialAddEvent{
-        Index:0,
-    })
 
     if !ctx.deviceReady() {
         t.Error("after nic inserted, it should ready now")
