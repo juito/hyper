@@ -64,8 +64,6 @@ func readVmMessage(conn *net.UnixConn) (*DecodedMessage,error) {
         code: binary.BigEndian.Uint32(res[:4]),
         message: res[8:],
     },nil
-
-
 }
 
 func waitInitReady(ctx *QemuContext) {

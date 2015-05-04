@@ -31,6 +31,7 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 	var qemuResponse *types.QemuResponse
 	for {
 		qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
+		glog.V(1).Infof("Got response: %d: %s", qemuResponse.Code, qemuResponse.Cause)
 		if qemuResponse.Code == types.E_SHUTDOWM {
 			break
 		}

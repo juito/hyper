@@ -36,47 +36,30 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	if err != nil {
 		return err
 	}
-	var (
-		ttyIO qemu.TtyIO
-		qemuCallback = make(chan *types.QemuResponse, 1)
-		qemuResponse *types.QemuResponse
-		sequence   uint64
-	)
 
-	ttyIO.Stdin = job.Stdin
-	ttyIO.Stdout = job.Stdout
-
-	var attachCommand = &qemu.AttachCommand {
-		Streams: &ttyIO,
-		Size:    nil,
-		Callback: qemuCallback,
+	execCmd := &qemu.ExecCommand{
+		Command: strings.Split(command, " "),
+		Streams: &qemu.TtyIO{
+			Stdin: job.Stdin,
+			Stdout: job.Stdout,
+			Callback: make(chan *types.QemuResponse, 1),
+		},
 	}
+
 	if typeKey == "pod" {
-		attachCommand.Container = ""
+		execCmd.Container = ""
 	} else {
-		attachCommand.Container = typeVal
+		execCmd.Container = typeVal
 	}
-	qemuEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
+
+	qemuEvent, _, err := daemon.GetQemuChan(string(vmid))
 	if err != nil {
 		return err
 	}
-	qemuEvent.(chan qemu.QemuEvent) <-attachCommand
-	attachResponse := <-qemuCallback
-	sequence = attachResponse.Data.(uint64)
 
-	execCommand := &qemu.ExecCommand {
-		Sequence: sequence,
-		Command: strings.Split(command, " "),
-		Container: attachCommand.Container,
-	}
-	qemuEvent.(chan qemu.QemuEvent) <-execCommand
+	qemuEvent.(chan qemu.QemuEvent) <- execCmd
 
-	for {
-		qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
-		if qemuResponse.Data == sequence {
-			break
-		}
-	}
+	<-execCmd.Streams.Callback
 	defer func() {
 		glog.V(2).Info("Defer function for exec!")
 	} ()

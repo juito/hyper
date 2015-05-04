@@ -4,7 +4,6 @@ import (
     "net"
     "dvm/api/pod"
     "os"
-    "dvm/api/types"
 )
 
 type QemuEvent interface {
@@ -34,9 +33,10 @@ type ReplacePodCommand struct {
 }
 
 type ExecCommand struct {
+    Container string `json:"container,omitempty"`
     Sequence  uint64 `json:"seq"`
     Command []string `json:"cmd"`
-    Container string `json:"container,omitempty"`
+    Streams   *TtyIO `json:"-"`
 }
 
 type ShutdownCommand struct {}
@@ -45,7 +45,6 @@ type AttachCommand struct {
     Container string
     Streams   *TtyIO
     Size      *WindowSize
-    Callback  chan *types.QemuResponse
 }
 
 type CommandAck struct {

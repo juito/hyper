@@ -398,17 +398,22 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_EXEC:
                 cmd := ev.(*ExecCommand)
                 if ctx.transition != nil {
-                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Running", Data: cmd.Sequence,}
+                    cmd.Streams.Callback <- &types.QemuResponse{
+                        VmId: ctx.id, Code: types.E_BUSY, Cause: "Command Launching", Data: cmd.Sequence,
+                    }
                     return
                 }
+                cmd.Sequence = ctx.nextAttachId()
                 pkg,err := json.Marshal(*cmd)
                 if err != nil {
-                    ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
+                    cmd.Streams.Callback <- &types.QemuResponse{
+                        VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
                         Cause: fmt.Sprintf("command %s parse failed", cmd.Command,), Data: cmd.Sequence,
                     }
                     return
                 }
                 ctx.transition = cmd
+                ctx.ptys.ptyConnect(cmd.Sequence, cmd.Streams)
                 ctx.vm <- &DecodedMessage{
                     code: INIT_EXECCMD,
                     message: pkg,
@@ -430,7 +435,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 cmd := ev.(*AttachCommand)
                 if !ctx.userSpec.Tty && cmd.Container != "" {
                     glog.Warning("trying to attach a container, but do not has tty")
-                    cmd.Callback <- &types.QemuResponse{
+                    cmd.Streams.Callback <- &types.QemuResponse{
                         VmId: ctx.id,
                         Code: types.E_NO_TTY,
                         Cause: "tty is not configured",
@@ -445,24 +450,17 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Connecting vm console tty.")
                     tc := ctx.consoleTty
-                    err = tc.connect(ctx, id, cmd.Streams)
+                    err = tc.connect(id, cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    err = tc.connect(ctx, id, cmd.Streams)
+                    err = tc.connect(id, cmd.Streams)
                 }
                 if err != nil {
-                    cmd.Callback <- &types.QemuResponse{
+                    cmd.Streams.Callback <- &types.QemuResponse{
                         VmId: ctx.id,
                         Code: types.E_BUSY,
                         Cause: err.Error(),
-                        Data: id,
-                    }
-                } else {
-                    cmd.Callback <- &types.QemuResponse{
-                        VmId: ctx.id,
-                        Code: types.E_OK,
-                        Cause: "Attached",
                         Data: id,
                     }
                 }
@@ -562,6 +560,7 @@ func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse,
     go waitInitReady(context)
     go launchQemu(context)
     go waitConsoleOutput(context)
+    go waitPts(context)
 
     for context != nil && context.handler != nil {
         ev,ok := <-context.hub

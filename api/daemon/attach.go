@@ -42,31 +42,24 @@ func (daemon *Daemon) CmdAttach(job *engine.Job) (err error) {
 
     ttyIO.Stdin = job.Stdin
     ttyIO.Stdout = job.Stdout
+    ttyIO.Callback = qemuCallback
 
     var attachCommand = &qemu.AttachCommand {
         Streams: &ttyIO,
         Size:    nil,
-        Callback: qemuCallback,
     }
     if typeKey == "pod" {
         attachCommand.Container = ""
     } else {
         attachCommand.Container = typeVal
     }
-    qemuEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
+    qemuEvent, _, err := daemon.GetQemuChan(string(vmid))
     if err != nil {
         return err
     }
     qemuEvent.(chan qemu.QemuEvent) <-attachCommand
-    attachResponse := <-qemuCallback
-    sequence = attachResponse.Data.(uint64)
 
-    for {
-        qemuResponse =<-qemuStatus.(chan *types.QemuResponse)
-        if qemuResponse.Data == sequence {
-            break
-        }
-    }
+    <-qemuCallback
     defer func() {
         glog.V(2).Info("Defer function for exec!")
     } ()

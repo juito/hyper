@@ -4,6 +4,7 @@ const (
     BaseDir     = "/var/run/dvm"
     DvmSockName = "dvm.sock"
     QmpSockName = "qmp.sock"
+    TtySockName = "tty.sock"
     ConsoleSockName = "console.sock"
     ShareDir    = "share_dir"
     SerialPrefix = "serial-port-"

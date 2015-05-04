@@ -31,11 +31,13 @@ type QemuContext struct {
     client chan *types.QemuResponse
     wdt chan string
 
+    ptys        *pseudoTtys
     timer       *time.Timer
     transition  QemuEvent
 
     qmpSockName string
     dvmSockName string
+    ttySockName string
     consoleSockName  string
     serialPortPrefix string
     shareDir    string
@@ -44,6 +46,7 @@ type QemuContext struct {
 
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
+    ttySock     *net.UnixListener
     consoleTty  *ttyContext
 
     handler     stateHandler
@@ -144,6 +147,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
     homeDir := BaseDir + "/" + id + "/"
     qmpSockName := homeDir + QmpSockName
     dvmSockName := homeDir + DvmSockName
+    ttySockName := homeDir + TtySockName
     consoleSockName := homeDir + ConsoleSockName
     serialPortPrefix := homeDir + SerialPrefix
     shareDir    := homeDir + ShareDir
@@ -157,6 +161,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
 
     mkSureNotExist(qmpSockName)
     mkSureNotExist(dvmSockName)
+    mkSureNotExist(ttySockName)
     mkSureNotExist(consoleSockName)
 
     qmpSock,err := net.ListenUnix("unix",  &net.UnixAddr{qmpSockName, "unix"})
@@ -173,6 +178,13 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
     }
     defer func(){ if err != nil {dvmSock.Close()}}()
 
+    ttySock,err := net.ListenUnix("unix",  &net.UnixAddr{ttySockName, "unix"})
+    if err != nil {
+        glog.Error("cannot create socket", ttySock, err.Error())
+        return nil,err
+    }
+    defer func(){ if err != nil {ttySock.Close()}}()
+
     return &QemuContext{
         id:         id,
         cpu:        cpu,
@@ -187,8 +199,10 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         qmp:        qmpChannel,
         vm:         vmChannel,
         wdt:        make(chan string, 16),
+        ptys:       newPts(),
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
+        ttySockName: ttySockName,
         consoleSockName: consoleSockName,
         serialPortPrefix: serialPortPrefix,
         shareDir:   shareDir,
@@ -197,6 +211,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         process:    nil,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
+        ttySock:    ttySock,
         consoleTty: nil,
         handler:    stateInit,
         userSpec:   nil,
@@ -518,6 +533,7 @@ func (ctx *QemuContext) Close() {
     close(ctx.wdt)
     ctx.qmpSock.Close()
     ctx.dvmSock.Close()
+    ctx.ttySock.Close()
     os.Remove(ctx.dvmSockName)
     os.Remove(ctx.qmpSockName)
     os.Remove(ctx.consoleSockName)
@@ -545,8 +561,10 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-kernel", ctx.kernel, "-initrd", ctx.initrd, "-append", "\"console=ttyS0 panic=1\"",
         "-qmp", "unix:" + ctx.qmpSockName, "-serial", fmt.Sprintf("unix:%s,server,nowait", ctx.consoleSockName),
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
-        "-chardev", "socket,id=charch0,telnet,path=" + ctx.dvmSockName,
+        "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
+        "-chardev", "socket,id=charch1,path=" + ctx.dvmSockName,
+        "-device", "virtserialport,bus=virtio-serial0.0,nr=2,chardev=charch1,id=channel1,name=org.getdvm.channel.1",
         "-fsdev", fmt.Sprintf("local,id=virtio9p,path=%s,security_model=none", ctx.shareDir),
         "-device", fmt.Sprintf("virtio-9p-pci,fsdev=virtio9p,mount_tag=%s", ShareDir),
     )
