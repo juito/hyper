@@ -19,6 +19,7 @@ import (
 	"dvm/api"
 	"dvm/dvmversion"
 	"dvm/lib/term"
+	"dvm/api/pod"
 )
 
 var (
@@ -157,7 +158,7 @@ func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, err
 	return body, statusCode, nil
 }
 
-func (cli *DvmClient) resizeTty(id string) {
+func (cli *DvmClient) resizeTty(id, tag string) {
 	height, width := cli.getTtySize()
 	if height == 0 && width == 0 {
 		return
@@ -166,19 +167,20 @@ func (cli *DvmClient) resizeTty(id string) {
 	v.Set("h", strconv.Itoa(height))
 	v.Set("w", strconv.Itoa(width))
 	v.Set("id", id)
+	v.Set("tag", tag)
 
 	if _, _, err := readBody(cli.call("POST", "/tty/resize?"+v.Encode(), nil, nil)); err != nil {
 		fmt.Printf("Error resize: %s", err.Error())
 	}
 }
-func (cli *DvmClient) monitorTtySize(id string) error {
-	cli.resizeTty(id)
+func (cli *DvmClient) monitorTtySize(id, tag string) error {
+	cli.resizeTty(id, tag)
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGWINCH)
 	go func() {
 		for _ = range sigchan {
-			cli.resizeTty(id)
+			cli.resizeTty(id, tag)
 		}
 	}()
 	return nil
@@ -196,4 +198,8 @@ func (cli *DvmClient) getTtySize() (int, int) {
 		}
 	}
 	return int(ws.Height), int(ws.Width)
+}
+
+func (cli *DvmClient)GetTag() string {
+	return pod.RandStr(8, "alphanum")
 }

@@ -17,6 +17,7 @@ func (daemon *Daemon) CmdAttach(job *engine.Job) (err error) {
     }
     typeKey := job.Args[0]
     typeVal := job.Args[1]
+    tag := job.Args[2]
     var podName string
 
     // We need find the vm id which running POD, and stop it
@@ -36,12 +37,11 @@ func (daemon *Daemon) CmdAttach(job *engine.Job) (err error) {
     var (
         ttyIO qemu.TtyIO
         qemuCallback = make(chan *types.QemuResponse, 1)
-        qemuResponse *types.QemuResponse
-        sequence   uint64
     )
 
     ttyIO.Stdin = job.Stdin
     ttyIO.Stdout = job.Stdout
+    ttyIO.ClientTag = tag
     ttyIO.Callback = qemuCallback
 
     var attachCommand = &qemu.AttachCommand {

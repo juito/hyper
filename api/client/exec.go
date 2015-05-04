@@ -21,6 +21,7 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		command = strings.Join(args[1:], "")
 		hostname = ""
 		err error
+		tag = cli.GetTag()
 	)
 	fmt.Printf("The pod name is %s, command is %s\n", podName, command)
 
@@ -40,6 +41,7 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		v.Set("value", podName)
 	}
 	v.Set("command", command)
+	v.Set("tag", tag)
 
 	var (
 		hijacked    = make(chan io.Closer)
@@ -57,7 +59,7 @@ func (cli *DvmClient) DvmCmdExec(args ...string) error {
 		return cli.hijack("POST", "/exec?"+v.Encode(), true, cli.in, cli.out, cli.out, hijacked, nil, hostname)
 	})
 
-	if err := cli.monitorTtySize(podName); err != nil {
+	if err := cli.monitorTtySize(podName, tag); err != nil {
 		fmt.Printf("Monitor tty size fail for %s!\n", podName)
 	}
 

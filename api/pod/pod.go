@@ -131,7 +131,7 @@ func ProcessPodBytes(body []byte) (*UserPod, error) {
 func RandStr(strSize int, randType string) string {
     var dictionary string
     if randType == "alphanum" {
-        dictionary = "0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+        dictionary = "0123456789abcdefghijklmnopqrstuvwxyz"
     }
 
     if randType == "alpha" {

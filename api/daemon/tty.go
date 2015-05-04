@@ -14,8 +14,9 @@ func (daemon *Daemon) CmdTty(job *engine.Job) (err error) {
 	}
 	var (
 		podID = job.Args[0]
-		h = job.Args[1]
-		w = job.Args[2]
+		tag = job.Args[1]
+		h = job.Args[2]
+		w = job.Args[3]
 		container string
 	)
 
@@ -41,7 +42,7 @@ func (daemon *Daemon) CmdTty(job *engine.Job) (err error) {
 		glog.Warning("Success to resize the tty!")
 	}
 	var ttySizeCommand = &qemu.WindowSizeCommand {
-		Container:        container,
+		ClientTag:        tag,
 		Size:             &qemu.WindowSize{Row:uint16(row), Column:uint16(column),},
 	}
 

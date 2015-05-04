@@ -254,7 +254,7 @@ func postExec(eng *engine.Engine, version version.Version, w http.ResponseWriter
 	}
 
 	var (
-		job = eng.Job("exec", r.Form.Get("type"), r.Form.Get("value"), r.Form.Get("command"))
+		job = eng.Job("exec", r.Form.Get("type"), r.Form.Get("value"), r.Form.Get("command"), r.Form.Get("tag"))
 		errOut io.Writer = os.Stderr
 		errStream io.Writer
 	)
@@ -290,7 +290,7 @@ func postAttach(eng *engine.Engine, version version.Version, w http.ResponseWrit
 	}
 
 	var (
-		job = eng.Job("attach", r.Form.Get("type"), r.Form.Get("value"))
+		job = eng.Job("attach", r.Form.Get("type"), r.Form.Get("value"), r.Form.Get("tag"))
 		errOut io.Writer = os.Stderr
 		errStream io.Writer
 	)
@@ -402,7 +402,7 @@ func postTtyResize(eng *engine.Engine, version version.Version, w http.ResponseW
 	if err := r.ParseForm(); err != nil {
 		return nil
 	}
-	job := eng.Job("tty", r.Form.Get("id"), r.Form.Get("h"), r.Form.Get("w"))
+	job := eng.Job("tty", r.Form.Get("id"), r.Form.Get("tag"), r.Form.Get("h"), r.Form.Get("w"))
 	if err := job.Run(); err != nil {
 		return err
 	}

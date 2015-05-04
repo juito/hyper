@@ -19,6 +19,7 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 	typeKey := job.Args[0]
 	typeVal := job.Args[1]
 	command := job.Args[2]
+	tag := job.Args[3]
 	var podId string
 
 	// We need find the vm id which running POD, and stop it
@@ -42,6 +43,7 @@ func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
 		Streams: &qemu.TtyIO{
 			Stdin: job.Stdin,
 			Stdout: job.Stdout,
+			ClientTag: tag,
 			Callback: make(chan *types.QemuResponse, 1),
 		},
 	}
