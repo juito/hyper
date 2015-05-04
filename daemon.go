@@ -1,9 +1,10 @@
 package main
 
 import (
-	"fmt"
+	"os"
+	"os/signal"
+	"syscall"
 	"flag"
-	"strings"
 
 	"dvm/api/daemon"
 	"dvm/engine"
@@ -24,7 +25,9 @@ func mainDaemon() {
 		return
 	}
 
-	daemonInitWait := make(chan error)
+	stop := make(chan os.Signal, 1)
+	signal.Notify(stop, syscall.SIGINT, syscall.SIGTERM)
+
 	// Install the accepted jobs
 	if err := d.Install(eng); err != nil {
 		glog.Error("the daemin install failed, %s\n", err.Error())
@@ -59,31 +62,21 @@ func mainDaemon() {
 		serveAPIWait <- nil
 	}()
 
-	// Wait for the daemon startup goroutine to finish
-	// This makes sure we can actually cleanly shutdown the daemon
-	errDaemon := <-daemonInitWait
-	if errDaemon != nil {
-		eng.Shutdown()
-		outStr := fmt.Sprintf("Shutting down daemon due to errors: %v", errDaemon)
-		if strings.Contains(errDaemon.Error(), "engine is shutdown") {
-			// if the error is "engine is shutdown", we've already reported (or
-			// will report below in API server errors) the error
-			outStr = "Shutting down daemon due to reported errors\n"
-		}
-		// we must "fatal" exit here as the API server may be happy to
-		// continue listening forever if the error had no impact to API
-		fmt.Printf(outStr)
-	} else {
-		glog.V(0).Info("Daemon has completed initialization\n")
-	}
+	glog.V(0).Info("Daemon has completed initialization\n")
 
 	// Daemon is fully initialized and handling API traffic
 	// Wait for serve API job to complete
-	errAPI := <-serveAPIWait
-	// If we have an error here it is unique to API (as daemonErr would have
-	// exited the daemon process above)
-	eng.Shutdown()
-	if errAPI != nil {
-		glog.Warningf("Shutting down due to ServeAPI error: %v\n", errAPI)
+	select {
+	case errAPI := <-serveAPIWait:
+		// If we have an error here it is unique to API (as daemonErr would have
+		// exited the daemon process above)
+		eng.Shutdown()
+		if errAPI != nil {
+			glog.Warningf("Shutting down due to ServeAPI error: %v\n", errAPI)
+		}
+		break
+	case <-stop:
+		eng.Shutdown()
+		break
 	}
 }
