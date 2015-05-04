@@ -148,9 +148,9 @@ func waitInitAck(ctx *QemuContext, init *net.UnixConn) {
                 seq := jv.Seq
                 glog.V(1).Infof("got sequence %d", seq)
 
-                if !ctx.consoleTty.findAndClose(seq) {
+                if !ctx.consoleTty.findAndClose(ctx, seq) {
                     for idx,tty := range ctx.devices.ttyMap {
-                        if tty.findAndClose(seq) {
+                        if tty.findAndClose(ctx, seq) {
                             glog.V(1).Infof("command on tty %d of container %d has finished, close it", seq, idx)
                             break
                         }

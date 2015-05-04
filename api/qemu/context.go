@@ -34,6 +34,7 @@ type QemuContext struct {
     ptys        *pseudoTtys
     timer       *time.Timer
     transition  QemuEvent
+    ttySessions map[string]interface{}
 
     qmpSockName string
     dvmSockName string
@@ -200,6 +201,7 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         vm:         vmChannel,
         wdt:        make(chan string, 16),
         ptys:       newPts(),
+        ttySessions: make(map[string]interface{}),
         qmpSockName: qmpSockName,
         dvmSockName: dvmSockName,
         ttySockName: ttySockName,
@@ -270,6 +272,20 @@ func (ctx* QemuContext) nextAttachId() uint64 {
     ctx.attachId ++
     ctx.lock.Unlock()
     return id
+}
+
+func (ctx *QemuContext) clientReg(tag string, session interface{}) {
+    ctx.lock.Lock()
+    ctx.ttySessions[tag] = session
+    ctx.lock.Unlock()
+}
+
+func (ctx *QemuContext) clientDereg(tag string) {
+    ctx.lock.Lock()
+    if _,ok := ctx.ttySessions[tag]; ok {
+        delete(ctx.ttySessions, tag)
+    }
+    ctx.lock.Unlock()
 }
 
 func (ctx* QemuContext) containerCreated(info *ContainerCreatedEvent) bool {

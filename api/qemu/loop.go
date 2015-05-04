@@ -92,12 +92,21 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
     }
 }
 
-func setWindowSize(ctx *QemuContext, container string, size *WindowSize) error {
-    msg, err := json.Marshal(map[string]interface{}{
-        "tty": ctx.Idx2Tty(ctx.Lookup(container)),
+func setWindowSize(ctx *QemuContext, tag string, size *WindowSize) error {
+    cmd := map[string]interface{}{
         "row": size.Row,
         "column": size.Column,
-    })
+    }
+    switch ctx.ttySessions[tag].(type) {
+        case string:
+            cmd["tty"] = ctx.Idx2Tty(ctx.Lookup(ctx.ttySessions[tag].(string)))
+        case uint64:
+            cmd["seq"] = ctx.ttySessions[tag].(uint64)
+        default:
+            glog.Error("cannot resolve client tag ", tag)
+            return nil
+    }
+    msg, err := json.Marshal(cmd)
     if err != nil {
         ctx.client <- &types.QemuResponse{ VmId: ctx.id, Code: types.E_JSON_PARSE_FAIL,
             Cause: fmt.Sprintf("command window size parse failed",),
@@ -413,7 +422,8 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                     return
                 }
                 ctx.transition = cmd
-                ctx.ptys.ptyConnect(cmd.Sequence, cmd.Streams)
+                ctx.ptys.ptyConnect(ctx, cmd.Sequence, cmd.Streams)
+                ctx.clientReg(cmd.Streams.ClientTag, cmd.Sequence)
                 ctx.vm <- &DecodedMessage{
                     code: INIT_EXECCMD,
                     message: pkg,
@@ -421,7 +431,7 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
             case COMMAND_WINDOWSIZE:
                 cmd := ev.(*WindowSizeCommand)
                 if ctx.userSpec.Tty {
-                    setWindowSize(ctx, cmd.Container, cmd.Size)
+                    setWindowSize(ctx, cmd.ClientTag, cmd.Size)
                 }
             case COMMAND_ACK:
                 ack := ev.(*CommandAck)
@@ -444,17 +454,14 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
                 id  := ctx.nextAttachId()
                 var err error = nil
-                if cmd.Size != nil {
-                    setWindowSize(ctx, cmd.Container, cmd.Size)
-                }
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Connecting vm console tty.")
                     tc := ctx.consoleTty
-                    err = tc.connect(id, cmd.Streams)
+                    err = tc.connect(ctx, id, cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    err = tc.connect(id, cmd.Streams)
+                    err = tc.connect(ctx, id, cmd.Streams)
                 }
                 if err != nil {
                     cmd.Streams.Callback <- &types.QemuResponse{
@@ -463,6 +470,9 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                         Cause: err.Error(),
                         Data: id,
                     }
+                } else if cmd.Size != nil {
+                    ctx.clientReg(cmd.Streams.ClientTag, cmd.Container)
+                    setWindowSize(ctx, cmd.Streams.ClientTag, cmd.Size)
                 }
             default:
                 glog.Warning("got event during pod running")

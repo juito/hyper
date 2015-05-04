@@ -22,6 +22,7 @@ type WindowSize struct {
 type TtyIO struct {
     Stdin   io.ReadCloser
     Stdout  io.WriteCloser
+    ClientTag string
     Callback chan *types.QemuResponse
 }
 
@@ -129,20 +130,19 @@ func waitPts(ctx *QemuContext) {
         if tty,ok := ctx.ptys.ttys[res.session]; ok {
             if len(res.message) == 0 {
                 glog.V(1).Infof("session %d closed by peer, close pty", res.session)
-                ctx.ptys.Close(res.session)
-
+                ctx.ptys.Close(ctx, res.session)
             } else if tty.Stdout != nil {
                 _,err := tty.Stdout.Write(res.message)
                 if err != nil {
                     glog.V(1).Infof("fail to write session %d, close pty", res.session)
-                    ctx.ptys.Close(res.session)
+                    ctx.ptys.Close(ctx, res.session)
                 }
             }
         }
     }
 }
 
-func (pts *pseudoTtys) Close(session uint64) {
+func (pts *pseudoTtys) Close(ctx *QemuContext, session uint64) {
     if tty,ok := pts.ttys[session]; ok {
         if tty.Stdin != nil {
             tty.Stdin.Close()
@@ -153,6 +153,9 @@ func (pts *pseudoTtys) Close(session uint64) {
         pts.lock.Lock()
         delete(pts.ttys, session)
         pts.lock.Unlock()
+        if tty.ClientTag != "" {
+            ctx.clientDereg(tty.ClientTag)
+        }
         tty.Callback <- &types.QemuResponse{
             Code:  types.E_EXEC_FINISH,
             Cause: "Command finished",
@@ -161,7 +164,7 @@ func (pts *pseudoTtys) Close(session uint64) {
     }
 }
 
-func (pts *pseudoTtys) ptyConnect(session uint64, tty *TtyIO) error {
+func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) error {
     if _,ok := pts.ttys[session]; ok {
         glog.Errorf("%d has already attached", session)
         return errors.New("repeat attach a same attach id")
@@ -174,7 +177,7 @@ func (pts *pseudoTtys) ptyConnect(session uint64, tty *TtyIO) error {
     if tty.Stdin != nil {
         go func() {
             buf := make([]byte, 1)
-            defer pts.Close(session)
+            defer pts.Close(ctx, session)
             for {
                 nr,err := tty.Stdin.Read(buf)
                 if err != nil {
@@ -196,7 +199,7 @@ func (pts *pseudoTtys) ptyConnect(session uint64, tty *TtyIO) error {
     return nil
 }
 
-func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {
+func setupTty(ctx *QemuContext, name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {
     var c net.Conn = conn
     if tn == true {
         tc,err := telnet.NewConn(conn)
@@ -215,13 +218,13 @@ func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyConte
         lock:       &sync.Mutex{},
     }
 
-    ttyc.connect(0, initIO)
-    go ttyReceive(ttyc)
+    ttyc.connect(ctx, 0, initIO)
+    go ttyReceive(ctx, ttyc)
 
     return ttyc
 }
 
-func ttyReceive(tc *ttyContext) {
+func ttyReceive(ctx *QemuContext, tc *ttyContext) {
     buf:= make([]byte, 1)
     for {
         nr,err := tc.vmConn.Read(buf)
@@ -245,7 +248,7 @@ func ttyReceive(tc *ttyContext) {
 
         if len(closed) > 0 {
             for _,aid := range closed {
-                tc.closeTerm(aid)
+                tc.closeTerm(ctx, aid)
             }
         }
     }
@@ -262,15 +265,15 @@ func (tc *ttyContext) hasAttachId(attach_id uint64) bool {
     return false
 }
 
-func (tc *ttyContext) findAndClose(attach_id uint64) bool {
+func (tc *ttyContext) findAndClose(ctx *QemuContext, attach_id uint64) bool {
     found := tc.hasAttachId(attach_id)
     if found {
-        tc.closeTerm(attach_id)
+        tc.closeTerm(ctx, attach_id)
     }
     return found
 }
 
-func (tc *ttyContext) closeTerm(attach_id uint64) {
+func (tc *ttyContext) closeTerm(ctx *QemuContext, attach_id uint64) {
     if tty,ok := tc.subscribers[attach_id]; ok {
         if tty.Stdin != nil {
             tty.Stdin.Close()
@@ -281,6 +284,9 @@ func (tc *ttyContext) closeTerm(attach_id uint64) {
         tc.lock.Lock()
         delete(tc.subscribers, attach_id)
         tc.lock.Unlock()
+        if tty.ClientTag != "" {
+            ctx.clientDereg(tty.ClientTag)
+        }
         if tty.Callback != nil {
             tty.Callback <- &types.QemuResponse{
                 Code:  types.E_EXEC_FINISH,
@@ -291,7 +297,7 @@ func (tc *ttyContext) closeTerm(attach_id uint64) {
     }
 }
 
-func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
+func (tc *ttyContext) connect(ctx *QemuContext, attach_id uint64, tty *TtyIO) error {
 
     if _,ok := tc.subscribers[attach_id]; ok {
         glog.Errorf("%d has already attached in this tty, cannot connected", attach_id)
@@ -305,7 +311,7 @@ func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
     if tty.Stdin != nil {
         go func() {
             buf := make([]byte, 1)
-            defer tc.closeTerm(attach_id)
+            defer tc.closeTerm(ctx, attach_id)
             for {
                 nr,err := tty.Stdin.Read(buf)
                 if err != nil {
@@ -410,7 +416,7 @@ func attachSerialPort(ctx *QemuContext, index,addr int) {
 }
 
 func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
-    tc := setupTty(sockName, conn, true, DropAllTty())
+    tc := setupTty(ctx, sockName, conn, true, DropAllTty())
 //    directConnectConsole(ctx, sockName, tc)
 
     ctx.hub <- &TtyOpenEvent{

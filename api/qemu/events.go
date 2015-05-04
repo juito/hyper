@@ -53,7 +53,7 @@ type CommandAck struct {
 }
 
 type WindowSizeCommand struct {
-    Container   string
+    ClientTag   string
     Size        *WindowSize
 }
 
