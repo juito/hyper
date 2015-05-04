@@ -30,7 +30,7 @@ type VmContainer struct {
     Image   string `json:"image"`
     Volumes []VmVolumeDescriptor `json:"volumes,omitempty"`
     Fsmap   []VmFsmapDescriptor `json:"fsmap,omitempty"`
-    Tty     string `json:"tty,omitempty"`
+    Tty     uint64 `json:"tty,omitempty"`
     Workdir string `json:"workdir"`
     Entrypoint []string `json:"-"`
     Cmd     []string `json:"cmd"`

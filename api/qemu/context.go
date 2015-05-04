@@ -452,7 +452,6 @@ func (ctx* QemuContext) serialAttached(info *SerialAddEvent) {
     if _,ok := ctx.progress.adding.serialPorts[info.Index]; ok {
         delete(ctx.progress.adding.serialPorts, info.Index)
     }
-    ctx.vmSpec.Containers[info.Index].Tty = info.PortName
 }
 
 func (ctx* QemuContext) ttyOpened(info *TtyOpenEvent) {
@@ -655,15 +654,15 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
 
         containers[i] = VmContainer{
             Id:      "",   Rootfs: "rootfs", Fstype: "ext4", Image:  "",
-            Volumes: vols,  Fsmap:   fsmap,   Tty:     "",
+            Volumes: vols,  Fsmap:   fsmap,   Tty:     0,
             Workdir: container.Workdir,  Entrypoint: container.Entrypoint, Cmd:     container.Command,     Envs:    envs,
             RestartPolicy: restart,
         }
 
         ctx.progress.adding.containers[i] = true
         if spec.Tty {
-            ctx.progress.adding.ttys[i] = true
-            ctx.progress.adding.serialPorts[i] = true
+            containers[i].Tty = ctx.nextAttachId()
+            ctx.ptys.ttys[containers[i].Tty] = newAttachments(i, true)
         }
     }
 

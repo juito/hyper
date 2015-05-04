@@ -241,7 +241,7 @@ func (pts *pseudoTtys) Close(ctx *QemuContext, session uint64) {
     }
 }
 
-func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint64, tty *TtyIO) error {
+func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint64, tty *TtyIO) {
 
     pts.lock.Lock()
     if ta,ok := pts.ttys[session]; ok {
@@ -273,7 +273,7 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint6
         }()
     }
 
-    return nil
+    return
 }
 
 func setupTty(ctx *QemuContext, name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {

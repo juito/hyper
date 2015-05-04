@@ -79,12 +79,6 @@ func prepareDevice(ctx *QemuContext, spec *pod.UserPod) {
             go CreateInterface(i, addr, name, i == 0, ctx.hub)
         }
     }
-    if ctx.userSpec.Tty {
-        for i:=0; i < len(ctx.userSpec.Containers); i++ {
-            addr := ctx.nextPciAddr()
-            go attachSerialPort(ctx, i, addr)
-        }
-    }
     for blk,_ := range ctx.progress.adding.blockdevs {
         info := ctx.devices.volumeMap[blk]
         sid := ctx.nextScsiId()
@@ -443,35 +437,22 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
-                if !ctx.userSpec.Tty && cmd.Container != "" {
+                idx := ctx.Lookup( cmd.Container )
+                if idx < 0 || idx > len(ctx.vmSpec.Containers) || ctx.vmSpec.Containers[idx].Tty == 0 {
                     glog.Warning("trying to attach a container, but do not has tty")
                     cmd.Streams.Callback <- &types.QemuResponse{
                         VmId: ctx.id,
                         Code: types.E_NO_TTY,
-                        Cause: "tty is not configured",
+                        Cause: fmt.Sprintf("tty is not configured for %s", cmd.Container),
                         Data: uint64(0),
                     }
+                    return
                 }
-                id  := ctx.nextAttachId()
-                var err error = nil
-                if cmd.Container == "" { //console
-                    glog.V(1).Info("Connecting vm console tty.")
-                    tc := ctx.consoleTty
-                    err = tc.connect(ctx, id, cmd.Streams)
-                } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
-                    glog.V(1).Info("Connecting tty for ", cmd.Container)
-                    tc := ctx.devices.ttyMap[idx]
-                    err = tc.connect(ctx, id, cmd.Streams)
-                }
-                if err != nil {
-                    cmd.Streams.Callback <- &types.QemuResponse{
-                        VmId: ctx.id,
-                        Code: types.E_BUSY,
-                        Cause: err.Error(),
-                        Data: id,
-                    }
-                } else if cmd.Size != nil {
-                    ctx.clientReg(cmd.Streams.ClientTag, cmd.Container)
+                session := ctx.vmSpec.Containers[idx].Tty
+                glog.V(1).Infof("Connecting tty for %s on session %d", cmd.Container, session)
+                ctx.ptys.ptyConnect(ctx, idx, session, cmd.Streams)
+                if cmd.Size != nil {
+                    ctx.clientReg(cmd.Streams.ClientTag, session)
                     setWindowSize(ctx, cmd.Streams.ClientTag, cmd.Size)
                 }
             default:
