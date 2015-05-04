@@ -5,8 +5,6 @@ import (
     "dvm/lib/glog"
     "time"
     "fmt"
-    "dvm/api/types"
-    "encoding/json"
 )
 
 // Message
@@ -139,33 +137,6 @@ func waitInitAck(ctx *QemuContext, init *net.UnixConn) {
             return
         } else if res.code == INIT_ACK {
             ctx.vm <- res
-        } else if res.code == INIT_FINISHCMD {
-            jv := FinishCmd{}
-            err = json.Unmarshal(res.message, &jv)
-            if err != nil {
-                glog.Errorf("finish cmd message failed, cannot parse json: ", err.Error())
-            } else {
-                seq := jv.Seq
-                glog.V(1).Infof("got sequence %d", seq)
-
-                if !ctx.consoleTty.findAndClose(ctx, seq) {
-                    for idx,tty := range ctx.devices.ttyMap {
-                        if tty.findAndClose(ctx, seq) {
-                            glog.V(1).Infof("command on tty %d of container %d has finished, close it", seq, idx)
-                            break
-                        }
-                    }
-                } else {
-                    glog.V(1).Infof("command on console tty %d has finished, close it", seq)
-                }
-
-                ctx.client <- &types.QemuResponse{
-                    VmId:  ctx.id,
-                    Code:  types.E_EXEC_FINISH,
-                    Cause: "Command finished",
-                    Data:  seq,
-                }
-            }
         }
     }
 }

@@ -338,64 +338,6 @@ func newNetworkDelSession(ctx *QemuContext, device string, callback QemuEvent) *
     }
 }
 
-func newSerialPortSession(ctx *QemuContext, sockName string, idx,addr int) *QmpSession {
-//func newSerialPortSession(ctx *QemuContext, sockName string, idx int) *QmpSession {
-    index    := strconv.Itoa(idx)
-    devId    := "podttys" + index
-    //ttysName := "org.getdvm.podttys." + index
-    ttysName := fmt.Sprintf("ttyS%d", idx + 1)
-    commands := make([]*QmpCommand, 2)
-    commands[0] = &QmpCommand{
-        Execute: "chardev-add",
-        Arguments: map[string]interface{}{
-            "id": devId,
-            "backend" :  map[string]interface{}{
-                "type":"socket","data": map[string]interface{}{
-                    "addr":  map[string]interface{}{
-//                        "type":"inet","data": map[string]interface{}{"port":"8864","host":"127.0.0.1",},
-                        "type":"unix","data": map[string]interface{}{"path":sockName,},
-                    },"server":true, "wait":false, "telnet":true,
-                },
-            },
-        },
-    }
-    commands[1] = &QmpCommand{
-        Execute:"device_add",
-        Arguments:  map[string]interface{}{
-//            "driver":"virtserialport","bus":"virtio-serial0.0","nr":strconv.Itoa(2 + idx),"name":ttysName,
-            "driver":"pci-serial", "addr":addr,
-            "chardev":"podttys" + index,"id":"ttys" + index,
-        },
-    }
-    return &QmpSession{
-        commands: commands,
-        callback: &SerialAddEvent{
-            Index: idx,
-            PortName: ttysName,
-        },
-    }
-}
-
-func newSerialDelSession(ctx *QemuContext, idx int, callback QemuEvent) *QmpSession {
-    commands := make([]*QmpCommand, 2)
-    commands[0] = &QmpCommand{
-        Execute: "device_del",
-        Arguments: map[string]interface{}{
-            "id": "ttys" + strconv.Itoa(idx),
-        },
-    }
-    commands[1] = &QmpCommand{
-        Execute: "chardev-remove",
-        Arguments: map[string]interface{}{
-            "id": "podttys" + strconv.Itoa(idx),
-        },
-    }
-    return &QmpSession{
-        commands: commands,
-        callback: callback,
-    }
-}
-
 func qmpCommander(handler chan QmpInteraction, conn *net.UnixConn, session *QmpSession, feedback chan QmpInteraction) {
     glog.V(1).Info("Begin process command session")
     for _,cmd := range session.commands {

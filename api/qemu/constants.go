@@ -7,7 +7,6 @@ const (
     TtySockName = "tty.sock"
     ConsoleSockName = "console.sock"
     ShareDir    = "share_dir"
-    SerialPrefix = "serial-port-"
     Kernel      = "/sources/dvminit/test/kernel"
     Initrd      = "/sources/dvminit/test/initrd-dvm.img"
     PciAddrFrom = 0x05

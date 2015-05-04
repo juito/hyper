@@ -5,9 +5,6 @@ import (
     "net"
     "dvm/lib/glog"
     "dvm/lib/telnet"
-    "strconv"
-    "os"
-    "time"
     "sync"
     "errors"
     "encoding/binary"
@@ -469,36 +466,3 @@ func ttyLiner(conn io.Reader, output chan string) {
         }
     }
 }
-
-func attachSerialPort(ctx *QemuContext, index,addr int) {
-    sockName := ctx.serialPortPrefix + strconv.Itoa(index) + ".sock"
-    os.Remove(sockName)
-    ctx.qmp <- newSerialPortSession(ctx, sockName, index, addr)
-//    ctx.qmp <- newSerialPortSession(ctx, sockName, index)
-
-    for i:=0; i < 5; i++ {
-        conn, err := net.Dial("unix", sockName)
-        if err == nil {
-            glog.V(1).Info("connected to ", sockName)
-            go connSerialPort(ctx, sockName, conn.(*net.UnixConn), index)
-            return
-        }
-        glog.Warningf("connect %s %d attempt: %s", sockName, i, err.Error())
-        time.Sleep(200 * time.Millisecond)
-    }
-
-    ctx.hub <- &InitFailedEvent{
-        reason: sockName + " init failed ",
-    }
-}
-
-func connSerialPort(ctx *QemuContext, sockName string, conn *net.UnixConn, index int) {
-    tc := setupTty(ctx, sockName, conn, true, DropAllTty())
-//    directConnectConsole(ctx, sockName, tc)
-
-    ctx.hub <- &TtyOpenEvent{
-        Index:  index,
-        TC:     tc,
-    }
-}
-

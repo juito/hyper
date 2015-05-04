@@ -7,7 +7,6 @@ import (
     "encoding/json"
     "fmt"
     "time"
-    "os"
 )
 
 func onQemuExit(ctx *QemuContext) {
@@ -34,11 +33,6 @@ func removeDevice(ctx *QemuContext) {
     ctx.releaseAufsDir()
     ctx.removeDMDevice()
 
-    for idx,tty := range ctx.devices.ttyMap {
-        glog.V(1).Infof("remove %d tty sock: %s", idx, tty.socketName)
-        os.Remove(tty.socketName)
-    }
-
     for idx,nic := range ctx.devices.networkMap {
         glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
         ctx.progress.deleting.networks[idx] = true
@@ -52,12 +46,6 @@ func detatchDevice(ctx *QemuContext) {
     ctx.releaseAufsDir()
     ctx.removeVolumeDrive()
     ctx.removeImageDrive()
-
-    for idx,tty := range ctx.devices.ttyMap {
-        glog.V(1).Infof("detach %d tty sock: %s", idx, tty.socketName)
-        ctx.progress.deleting.serialPorts[idx] = true
-        ctx.qmp <- newSerialDelSession(ctx, idx, &SerialDelEvent{Index:idx})
-    }
 
     for idx,nic := range ctx.devices.networkMap {
         glog.V(1).Infof("remove network card %d: %s", idx, nic.IpAddr)
@@ -92,8 +80,6 @@ func setWindowSize(ctx *QemuContext, tag string, size *WindowSize) error {
         "column": size.Column,
     }
     switch ctx.ttySessions[tag].(type) {
-        case string:
-            cmd["tty"] = ctx.Idx2Tty(ctx.Lookup(ctx.ttySessions[tag].(string)))
         case uint64:
             cmd["seq"] = ctx.ttySessions[tag].(uint64)
         default:
@@ -197,12 +183,6 @@ func deviceInitHandler(ctx *QemuContext, ev QemuEvent) bool {
         case EVENT_INTERFACE_INSERTED:
             info := ev.(*NetDevInsertedEvent)
             ctx.netdevInserted(info)
-        case EVENT_SERIAL_ADD:
-            info := ev.(*SerialAddEvent)
-            ctx.serialAttached(info)
-        case EVENT_TTY_OPEN:
-            info := ev.(*TtyOpenEvent)
-            ctx.ttyOpened(info)
         default:
             processed = false
     }
@@ -286,14 +266,6 @@ func deviceRemoveHandler(ctx *QemuContext, ev QemuEvent) bool {
                     glog.V(1).Infof("blockdev %s deleted", v.Name)
                     delete(ctx.progress.deleting.blockdevs, v.Name)
                 }
-            }
-        case EVENT_SERIAL_DELETE:
-            s := ev.(*SerialDelEvent)
-            tty := ctx.devices.ttyMap[s.Index]
-            glog.V(1).Infof("remove %d tty sock: %s", s.Index, tty.socketName)
-            os.Remove(tty.socketName)
-            if _,ok := ctx.progress.deleting.serialPorts[s.Index]; ok {
-                delete(ctx.progress.deleting.serialPorts, s.Index)
             }
         case EVENT_INTERFACE_EJECTED:
             n := ev.(*NetDevRemovedEvent)
