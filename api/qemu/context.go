@@ -47,7 +47,6 @@ type QemuContext struct {
     qmpSock     *net.UnixListener
     dvmSock     *net.UnixListener
     ttySock     *net.UnixListener
-    consoleTty  *ttyContext
 
     handler     stateHandler
 
@@ -207,7 +206,6 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         qmpSock:    qmpSock,
         dvmSock:    dvmSock,
         ttySock:    ttySock,
-        consoleTty: nil,
         handler:    stateInit,
         userSpec:   nil,
         vmSpec:     nil,

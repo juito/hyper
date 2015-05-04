@@ -4,9 +4,7 @@ import (
     "io"
     "net"
     "dvm/lib/glog"
-    "dvm/lib/telnet"
     "sync"
-    "errors"
     "encoding/binary"
     "dvm/api/types"
 )
@@ -21,13 +19,6 @@ type TtyIO struct {
     Stdout  io.WriteCloser
     ClientTag string
     Callback chan *types.QemuResponse
-}
-
-type ttyContext struct {
-    socketName  string
-    vmConn      net.Conn
-    subscribers map[uint64]*TtyIO
-    lock        *sync.Mutex
 }
 
 type ttyAttachments struct {
@@ -271,158 +262,6 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint6
     }
 
     return
-}
-
-func setupTty(ctx *QemuContext, name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyContext {
-    var c net.Conn = conn
-    if tn == true {
-        tc,err := telnet.NewConn(conn)
-        if err != nil {
-            glog.Error("fail to init telnet connection to ", name, ": ", err.Error())
-            return nil
-        }
-        glog.V(1).Infof("connected %s as telnet mode.", name)
-        c = tc
-    }
-
-    ttyc := &ttyContext{
-        socketName: name,
-        vmConn:     c,
-        subscribers:make(map[uint64]*TtyIO),
-        lock:       &sync.Mutex{},
-    }
-
-    ttyc.connect(ctx, 0, initIO)
-    go ttyReceive(ctx, ttyc)
-
-    return ttyc
-}
-
-func ttyReceive(ctx *QemuContext, tc *ttyContext) {
-    buf:= make([]byte, 1)
-    for {
-        nr,err := tc.vmConn.Read(buf)
-        if err != nil {
-            glog.Error("reader exit... ", err.Error())
-            return
-        }
-
-        closed := []uint64{}
-        for aid,rd := range tc.subscribers {
-            if rd.Stdout == nil {
-                continue
-            }
-            _,err := rd.Stdout.Write(buf[:nr])
-            if err != nil {
-                glog.V(0).Info("Writer close ", err.Error())
-                closed = append(closed, aid)
-                continue
-            }
-        }
-
-        if len(closed) > 0 {
-            for _,aid := range closed {
-                tc.closeTerm(ctx, aid)
-            }
-        }
-    }
-}
-
-func (tc *ttyContext) hasAttachId(attach_id uint64) bool {
-    tc.lock.Lock()
-    defer tc.lock.Unlock()
-    for id,_ := range tc.subscribers {
-        if id == attach_id {
-            return true
-        }
-    }
-    return false
-}
-
-func (tc *ttyContext) findAndClose(ctx *QemuContext, attach_id uint64) bool {
-    found := tc.hasAttachId(attach_id)
-    if found {
-        tc.closeTerm(ctx, attach_id)
-    }
-    return found
-}
-
-func (tc *ttyContext) closeTerm(ctx *QemuContext, attach_id uint64) {
-    if tty,ok := tc.subscribers[attach_id]; ok {
-        if tty.Stdin != nil {
-            tty.Stdin.Close()
-        }
-        if tty.Stdout != nil {
-            tty.Stdout.Close()
-        }
-        tc.lock.Lock()
-        delete(tc.subscribers, attach_id)
-        tc.lock.Unlock()
-        if tty.ClientTag != "" {
-            ctx.clientDereg(tty.ClientTag)
-        }
-        if tty.Callback != nil {
-            tty.Callback <- &types.QemuResponse{
-                Code:  types.E_EXEC_FINISH,
-                Cause: "Command finished",
-                Data:  attach_id,
-            }
-        }
-    }
-}
-
-func (tc *ttyContext) connect(ctx *QemuContext, attach_id uint64, tty *TtyIO) error {
-
-    if _,ok := tc.subscribers[attach_id]; ok {
-        glog.Errorf("%d has already attached in this tty, cannot connected", attach_id)
-        return errors.New("repeat attach a same attach id")
-    }
-
-    tc.lock.Lock()
-    tc.subscribers[attach_id] = tty
-    tc.lock.Unlock()
-
-    if tty.Stdin != nil {
-        go func() {
-            buf := make([]byte, 1)
-            defer tc.closeTerm(ctx, attach_id)
-            for {
-                nr,err := tty.Stdin.Read(buf)
-                if err != nil {
-                    glog.Info("a stdin closed, ", err.Error())
-                    return
-                } else if nr == 1 && buf[0] == ExitChar {
-                    glog.Info("got stdin detach char, exit term")
-                    return
-                }
-                _,err = tc.vmConn.Write(buf[:nr])
-                if err != nil {
-                    glog.Info("vm connection closed, close reader tty, ", err.Error())
-                    return
-                }
-            }
-        }()
-    }
-
-    return nil
-}
-
-func DropAllTty() *TtyIO {
-    r,w := io.Pipe()
-    go func(){
-        buf := make([]byte, 256)
-        for {
-            _,err := r.Read(buf)
-            if err != nil {
-                return
-            }
-        }
-    }()
-    return &TtyIO{
-        Stdin:  nil,
-        Stdout: w,
-        Callback: nil,
-    }
 }
 
 func LinerTty(output chan string) *TtyIO {

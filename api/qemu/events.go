@@ -130,20 +130,6 @@ type NetDevRemovedEvent struct {
     Index       int
 }
 
-type SerialAddEvent struct {
-    Index       int
-    PortName    string
-}
-
-type SerialDelEvent struct {
-    Index       int
-}
-
-type TtyOpenEvent struct {
-    Index       int
-    TC          *ttyContext
-}
-
 type DeviceFailed struct {
     session     QemuEvent
 }
@@ -165,9 +151,6 @@ func (qe* InterfaceCreated)         Event() int { return EVENT_INTERFACE_ADD }
 func (qe* InterfaceReleased)        Event() int { return EVENT_INTERFACE_DELETE }
 func (qe* NetDevInsertedEvent)      Event() int { return EVENT_INTERFACE_INSERTED }
 func (qe* NetDevRemovedEvent)       Event() int { return EVENT_INTERFACE_EJECTED }
-func (qe* TtyOpenEvent)             Event() int { return EVENT_TTY_OPEN }
-func (qe* SerialAddEvent)           Event() int { return EVENT_SERIAL_ADD }
-func (qe* SerialDelEvent)           Event() int { return EVENT_SERIAL_DELETE }
 func (qe* RunPodCommand)            Event() int { return COMMAND_RUN_POD }
 func (qe* ReplacePodCommand)        Event() int { return COMMAND_REPLACE_POD }
 func (qe* ExecCommand)              Event() int { return COMMAND_EXEC }

@@ -7,6 +7,7 @@ import (
     "strings"
     "time"
     "net"
+    "dvm/lib/telnet"
 )
 
 func printDebugOutput(tag string, out io.ReadCloser) {
@@ -43,9 +44,15 @@ func waitConsoleOutput(ctx *QemuContext) {
 
     glog.V(1).Info("connected to ", ctx.consoleSockName)
 
+    tc,err := telnet.NewConn(conn)
+    if err != nil {
+        glog.Error("fail to init telnet connection to ", ctx.consoleSockName, ": ", err.Error())
+        return
+    }
+    glog.V(1).Infof("connected %s as telnet mode.", ctx.consoleSockName)
+
     cout := make(chan string, 128)
-    ctx.consoleTty = setupTty(ctx, ctx.consoleSockName, conn.(*net.UnixConn), true, LinerTty(cout))
-    //directConnectConsole(ctx, ctx.consoleSockName, tc)
+    go ttyLiner(tc, cout)
 
     for {
         line,ok := <- cout
