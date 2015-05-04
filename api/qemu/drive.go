@@ -279,7 +279,12 @@ func UmountVolume(shareDir, volPath string, name string, hub chan QemuEvent) {
 }
 
 func UmountDMDevice(deviceFullPath, name string, hub chan QemuEvent) {
-	cmd := exec.Command("dmsetup remove", deviceFullPath)
+	vol, err := exec.LookPath("dmsetup")
+	if err != nil {
+		glog.Error("Cannot find dmsetup command: %s", err.Error())
+		return
+	}
+	cmd := exec.Command(vol, "remove", deviceFullPath)
 	success := true
 	if err := cmd.Run(); err != nil {
 		glog.Warningf("Cannot umount device %s: %s", deviceFullPath, err.Error())
