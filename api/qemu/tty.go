@@ -48,7 +48,7 @@ func setupTty(name string, conn *net.UnixConn, tn bool, initIO *TtyIO) *ttyConte
         lock:       &sync.Mutex{},
     }
 
-    ttyc.connect(0, initIO)
+    ttyc.connect(nil, 0, initIO)
     go ttyReceive(ttyc)
 
     return ttyc
@@ -117,7 +117,7 @@ func (tc *ttyContext) closeTerm(attach_id uint64) {
     tc.lock.Unlock()
 }
 
-func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
+func (tc *ttyContext) connect(ctx *QemuContext, attach_id uint64, tty *TtyIO) error {
 
     if _,ok := tc.subscribers[attach_id]; ok {
         glog.Errorf("%d has already attached in this tty, cannot connected", attach_id)
@@ -139,6 +139,14 @@ func (tc *ttyContext) connect(attach_id uint64, tty *TtyIO) error {
                     return
                 } else if nr == 1 && buf[0] == ExitChar {
                     glog.Info("got stdin detach char, exit term")
+                    if ctx != nil {
+                        ctx.client <- &types.QemuResponse{
+                            VmId:  ctx.id,
+                            Code:  types.E_EXEC_FINISH,
+                            Cause: "Command finished",
+                            Data:  attach_id,
+                        }
+                    }
                     return
                 }
                 _,err = tc.vmConn.Write(buf[:nr])

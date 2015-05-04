@@ -445,11 +445,11 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 if cmd.Container == "" { //console
                     glog.V(1).Info("Connecting vm console tty.")
                     tc := ctx.consoleTty
-                    err = tc.connect(id, cmd.Streams)
+                    err = tc.connect(ctx, id, cmd.Streams)
                 } else if idx := ctx.Lookup( cmd.Container ); idx >= 0 {
                     glog.V(1).Info("Connecting tty for ", cmd.Container)
                     tc := ctx.devices.ttyMap[idx]
-                    err = tc.connect(id, cmd.Streams)
+                    err = tc.connect(ctx, id, cmd.Streams)
                 }
                 if err != nil {
                     cmd.Callback <- &types.QemuResponse{
@@ -515,6 +515,8 @@ func stateTerminating(ctx *QemuContext, ev QemuEvent) {
                         ctx.wdt <- "kill"
                     }
                 })
+            case ERROR_INTERRUPTED:
+                glog.V(1).Info("dvm init communication channel closed.")
         }
     }
 }
@@ -534,6 +536,8 @@ func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
             case EVENT_QEMU_TIMEOUT:
                 glog.Info("Device removing timeout")
                 ctx.Close()
+            case ERROR_INTERRUPTED:
+                glog.V(1).Info("dvm init communication channel closed.")
             default:
                 glog.Warning("got event during pod cleaning up")
         }
