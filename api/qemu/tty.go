@@ -44,6 +44,15 @@ type ttyMessage struct {
     message     []byte
 }
 
+func (tm *ttyMessage) toBuffer() []byte {
+    length := len(tm.message) + 12
+    buf := make([]byte, length)
+    binary.BigEndian.PutUint64(buf[:8], tm.session)
+    binary.BigEndian.PutUint32(buf[8:12], uint32(length))
+    copy(buf[12:], tm.message)
+    return buf
+}
+
 func newPts() *pseudoTtys {
     return &pseudoTtys{
         channel: make(chan *ttyMessage, 256),
@@ -97,8 +106,11 @@ func waitTtyMessage(ctx *QemuContext, conn *net.UnixConn) {
             glog.V(1).Info("tty chan closed, quit sent goroutine")
             break
         }
+
+        glog.V(3).Infof("trying to write to session %d", msg.session)
+
         if _,ok := ctx.ptys.ttys[msg.session]; ok {
-            _,err := conn.Write(msg.message)
+            _,err := conn.Write(msg.toBuffer())
             if err != nil {
                 glog.V(1).Info("Cannot write to tty socket: ", err.Error())
                 return
@@ -116,6 +128,8 @@ func waitPts(ctx *QemuContext) {
         }
         return
     }
+
+    glog.V(1).Info("tty socket connected")
 
     go waitTtyMessage(ctx, conn)
 
@@ -170,12 +184,15 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) 
         return errors.New("repeat attach a same attach id")
     }
 
+    glog.V(1).Info("connected session %d, client %s", session, tty.ClientTag)
+
     pts.lock.Lock()
     pts.ttys[session] = tty
     pts.lock.Unlock()
 
     if tty.Stdin != nil {
         go func() {
+            glog.V(1).Info("begin listen input from %d/%s", session, tty.ClientTag)
             buf := make([]byte, 1)
             defer pts.Close(ctx, session)
             for {
@@ -187,6 +204,8 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) 
                     glog.Info("got stdin detach char, exit term")
                     return
                 }
+
+                glog.V(3).Infof("trying to input char: %d", buf[0])
 
                 pts.channel <- &ttyMessage{
                     session: session,
