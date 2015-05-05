@@ -579,7 +579,7 @@ func (ctx *QemuContext) QemuArguments() []string {
         "-device", "virtio-serial-pci,id=virtio-serial0,bus=pci.0,addr=0x2","-device", "virtio-scsi-pci,id=scsi0,bus=pci.0,addr=0x3",
         "-chardev", "socket,id=charch0,path=" + ctx.dvmSockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=1,chardev=charch0,id=channel0,name=org.getdvm.channel.0",
-        "-chardev", "socket,id=charch1,path=" + ctx.dvmSockName,
+        "-chardev", "socket,id=charch1,path=" + ctx.ttySockName,
         "-device", "virtserialport,bus=virtio-serial0.0,nr=2,chardev=charch1,id=channel1,name=org.getdvm.channel.1",
         "-fsdev", fmt.Sprintf("local,id=virtio9p,path=%s,security_model=none", ctx.shareDir),
         "-device", fmt.Sprintf("virtio-9p-pci,fsdev=virtio9p,mount_tag=%s", ShareDir),
