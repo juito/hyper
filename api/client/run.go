@@ -19,19 +19,21 @@ func (cli *DvmClient) DvmCmdRun(args ...string) error {
 		return fmt.Errorf("DVM ERROR: Can not accept the 'run' command without argument!\n")
 	}
 	var opts struct {
-		Help     bool     `short:"h" long:"help" default:"false" description:"Print usage"`
-		Name     string   `short:"n" long:"name" description:"Assign a name to the container"`
-		Attach   bool     `short:"a" long:"attach" default:"true" description:"Attach the stdin, stdout and stderr to the container"`
-		Workdir  string   `short:"w" long:"workdir"  default:"/" description:"Working directory inside the container"`
-		Tty      bool     `short:"t" long:"tty" default:"true" description:"Allocate a pseudo-TTY"`
-		Cpu      uint     `short:"c" long:"cpu" default:"1" description:"CPU shares (relative weight)"`
-		Memory   uint     `short:"m" long:"memory" default:"128" description:"Memory limit (format: <number><optional unit>, where unit = b, k, m or g)"`
-		Env      []string `short:"e" long:"env" description:"Set environment variables"`
-		EntryPoint      string   `long:"entrypoint" description:"Overwrite the default ENTRYPOINT of the image"`
-		RestartPolicy   string   `short:"r" long:"restart" default:"never" description:"Restart policy to apply when a container exits (no, on-failure[:max-retry], always)"`
+		Name     string   `short:"n" long:"name" value-name:"\"\"" description:"Assign a name to the container"`
+		Attach   bool     `short:"a" long:"attach" default:"true" default-mask:"-" description:"Attach the stdin, stdout and stderr to the container"`
+		Workdir  string   `short:"w" long:"workdir"  value-name:"\"\"" default-mask:"-" description:"Working directory inside the container"`
+		Tty      bool     `short:"t" long:"tty" default:"true" default-mask:"-" description:"Allocate a pseudo-TTY"`
+		Cpu      uint     `short:"c" long:"cpu" default:"1" value-name:"0" default-mask:"-" description:"CPU shares (relative weight)"`
+		Memory   uint     `short:"m" long:"memory" default:"128" value-name:"0" default-mask:"-" description:"Memory limit (format: <number><optional unit>, where unit = b, k, m or g)"`
+		Env      []string `short:"e" long:"env" value-name:"[]" default-mask:"-" description:"Set environment variables"`
+		EntryPoint      string   `long:"entrypoint" value-name:"\"\"" default-mask:"-" description:"Overwrite the default ENTRYPOINT of the image"`
+		RestartPolicy   string   `short:"r" long:"restart" default:"never" value-name:"\"\"" default-mask:"-" description:"Restart policy to apply when a container exits (no, on-failure[:max-retry], always)"`
 	}
 
-	args, _= gflag.ParseArgs(&opts, args)
+	args, err := gflag.ParseArgs(&opts, args)
+	if err != nil {
+		return err
+	}
 	if len(args) == 0 {
 		return fmt.Errorf("DVM: \"run\" requires a minimum of 1 argument, please provide the image.")
 	}
