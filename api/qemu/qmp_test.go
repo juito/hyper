@@ -80,7 +80,7 @@ func testQmpInitHelper(t *testing.T, s string) net.Conn {
 func TestQmpHello(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -103,7 +103,7 @@ func TestQmpHello(t *testing.T) {
 
 func TestInitFail(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -156,7 +156,7 @@ func TestInitFail(t *testing.T) {
 
 func TestQmpConnTimeout(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -172,7 +172,7 @@ func TestQmpConnTimeout(t *testing.T) {
 
 func TestQmpInitTimeout(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -198,7 +198,7 @@ func TestQmpInitTimeout(t *testing.T) {
 func TestQmpDiskSession(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -236,7 +236,7 @@ func TestQmpDiskSession(t *testing.T) {
 func TestQmpFailOnce(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -280,7 +280,7 @@ func TestQmpFailOnce(t *testing.T) {
 
 func TestQmpKeepFail(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -324,7 +324,7 @@ func TestQmpKeepFail(t *testing.T) {
 func TestQmpNetSession(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -369,7 +369,7 @@ func TestQmpNetSession(t *testing.T) {
 func TestQmpSerialSession(t *testing.T) {
 
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 
@@ -408,7 +408,7 @@ func TestQmpSerialSession(t *testing.T) {
 
 func TestSessionQueue(t *testing.T) {
     qemuChan := make(chan QemuEvent, 128)
-    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128)
+    ctx,_ := initContext("vmid", qemuChan, nil, 1, 128, Kernel, Initrd)
 
     go qmpHandler(ctx)
 

@@ -33,7 +33,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
 	qemuStatus := make(chan *types.QemuResponse, 100)
 
-	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512)
+	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512, "", "")
 	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {
 		glog.V(1).Infof("SetQemuChan error: %s", err.Error())
 		return err
