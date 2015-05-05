@@ -1,0 +1,2 @@
+Kernel=/sources/dvminit/test/kernel
+Initrd=/sources/dvminit/test/initrd-dvm.img

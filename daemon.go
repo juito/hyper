@@ -10,15 +10,31 @@ import (
 	"dvm/engine"
 	"dvm/dvmversion"
 	"dvm/lib/glog"
+	"dvm/lib/goconfig"
 )
 
 func main() {
+	flConfig := flag.String("config", "/etc/dvm/config", "Configuration for DVM")
 	flag.Parse()
-	mainDaemon()
+	mainDaemon(*flConfig)
 }
 
-func mainDaemon() {
+func mainDaemon(config string) {
+	glog.V(0).Infof("The config file is %s", config)
 	eng := engine.New()
+	if config == "" {
+		config = "/etc/dvm/config"
+	}
+	cfg, err := goconfig.LoadConfigFile(config)
+	if err != nil {
+		glog.Errorf("Read config file (%s) failed, %s", config, err.Error())
+		return
+	}
+	kernel, _ := cfg.GetValue(goconfig.DEFAULT_SECTION, "Kernel")
+	initrd, _ := cfg.GetValue(goconfig.DEFAULT_SECTION, "Initrd")
+	glog.V(0).Infof("The config: kernel=%s, initrd=%s", kernel, initrd)
+	os.Setenv("Kernel", kernel)
+	os.Setenv("Initrd", initrd)
 	d, err := daemon.NewDaemon(eng)
 	if err != nil {
 		glog.Error("the daemon create failed, %s\n", err.Error())

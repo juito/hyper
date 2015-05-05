@@ -1,6 +1,7 @@
 package daemon
 
 import (
+	"os"
 	"fmt"
 	"strings"
 
@@ -33,7 +34,8 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
 	qemuStatus := make(chan *types.QemuResponse, 100)
 
-	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512, "", "")
+	glog.V(1).Infof("The config: kernel=%s, initrd=%s", os.Getenv("Kernel"), os.Getenv("Initrd"))
+	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512, os.Getenv("Kernel"), os.Getenv("Initrd"))
 	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {
 		glog.V(1).Infof("SetQemuChan error: %s", err.Error())
 		return err
