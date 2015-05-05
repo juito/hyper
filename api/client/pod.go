@@ -27,22 +27,30 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 	if err != nil {
 		return err
 	}
-
-	v := url.Values{}
-	v.Set("podArgs", string(jsonbody))
-	body, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil));
+	_, err = cli.CreatePod(string(jsonbody))
 	if err != nil {
 		return err
+	}
+
+	return nil
+}
+
+func (cli *DvmClient)CreatePod(jsonbody string) (string, error) {
+	v := url.Values{}
+	v.Set("podArgs", jsonbody)
+	body, _, err := readBody(cli.call("POST", "/pod/create?"+v.Encode(), nil, nil));
+	if err != nil {
+		return "", err
 	}
 	out := engine.NewOutput()
 	remoteInfo, err := out.AddEnv()
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if _, err := out.Write(body); err != nil {
 		fmt.Printf("Error reading remote info: %s", err)
-		return err
+		return "", err
 	}
 	out.Close()
 	if remoteInfo.Exists("ID") {
@@ -61,9 +69,11 @@ func (cli *DvmClient) DvmCmdPod(args ...string) error {
 			errCode != types.E_INIT_FAIL &&
 			errCode != types.E_QMP_COMMAND_FAIL {
 			fmt.Println("DVM error: Got an unexpected error code during create POD!\n")
+			return "", fmt.Errorf("Error code is %d", errCode)
 		} else {
 			fmt.Printf("DVM error: %s\n", remoteInfo.Get("Cause"))
+			return "", fmt.Errorf("Cause is %s", remoteInfo.Get("Cause"))
 		}
 	}
-	return nil
+	return remoteInfo.Get("ID"), nil
 }
