@@ -510,8 +510,15 @@ func stateCleaningUp(ctx *QemuContext, ev QemuEvent) {
 
 // main loop
 
-func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) {
-    context,err := initContext(dvmId, hub, client, cpu, memory)
+func QemuLoop(dvmId string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int, kernel, initrd string) {
+    if kernel == "" {
+        kernel = Kernel
+    }
+    if initrd == "" {
+        initrd = Initrd
+    }
+
+    context,err := initContext(dvmId, hub, client, cpu, memory, kernel, initrd)
     if err != nil {
         client <- &types.QemuResponse{
             VmId: dvmId,

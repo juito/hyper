@@ -130,7 +130,7 @@ func newProcessingList() *processingList{
     }
 }
 
-func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int) (*QemuContext,error) {
+func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse, cpu, memory int, kernel, initrd string) (*QemuContext,error) {
 
     var err error = nil
 
@@ -186,8 +186,8 @@ func initContext(id string, hub chan QemuEvent, client chan *types.QemuResponse,
         pciAddr:    PciAddrFrom,
         scsiId:     0,
         attachId:   1,
-        kernel:     Kernel,
-        initrd:     Initrd,
+        kernel:     kernel,
+        initrd:     initrd,
         hub:        hub,
         client:     client,
         qmp:        qmpChannel,
