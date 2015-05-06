@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"dvm/engine"
     "dvm/api/pod"
+	gflag "github.com/jessevdk/go-flags"
 )
-
 
 func (cli *DvmClient) DvmCmdList(args ...string) error {
 	var item string
@@ -16,6 +16,13 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 		item = "pod"
 	} else {
 		item = args[0]
+	}
+
+	var parser = gflag.NewParser(nil, gflag.Default)
+	parser.Usage = "list [pod|vm|container]\n\nDisplay the POD, VM or container information"
+	args, err := parser.Parse()
+	if err != nil {
+		return nil
 	}
 
 	if item != "pod" && item != "vm" && item != "container" {
