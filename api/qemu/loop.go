@@ -435,8 +435,8 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 session := ctx.vmSpec.Containers[idx].Tty
                 glog.V(1).Infof("Connecting tty for %s on session %d", cmd.Container, session)
                 ctx.ptys.ptyConnect(ctx, idx, session, cmd.Streams)
+                ctx.clientReg(cmd.Streams.ClientTag, session)
                 if cmd.Size != nil {
-                    ctx.clientReg(cmd.Streams.ClientTag, session)
                     setWindowSize(ctx, cmd.Streams.ClientTag, cmd.Size)
                 }
             default:
