@@ -626,7 +626,8 @@ func (ctx *QemuContext) InitDeviceContext(spec *pod.UserPod, networks int) {
 
         ctx.progress.adding.containers[i] = true
         if spec.Tty {
-            containers[i].Tty = ctx.nextAttachId()
+            containers[i].Tty = ctx.attachId
+            ctx.attachId ++
             ctx.ptys.ttys[containers[i].Tty] = newAttachments(i, true)
         }
     }
