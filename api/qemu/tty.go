@@ -193,7 +193,7 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) 
     if tty.Stdin != nil {
         go func() {
             glog.V(1).Info("begin listen input from %d/%s", session, tty.ClientTag)
-            buf := make([]byte, 1)
+            buf := make([]byte, 256)
             defer pts.Close(ctx, session)
             for {
                 nr,err := tty.Stdin.Read(buf)
@@ -205,7 +205,7 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, session uint64, tty *TtyIO) 
                     return
                 }
 
-                glog.V(3).Infof("trying to input char: %d", buf[0])
+                glog.V(3).Infof("trying to input char: %d and %d chars", buf[0], nr)
 
                 pts.channel <- &ttyMessage{
                     session: session,
