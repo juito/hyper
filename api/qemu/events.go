@@ -52,6 +52,11 @@ type CommandAck struct {
     msg     []byte
 }
 
+type CommandError struct {
+    context *DecodedMessage
+    msg     []byte
+}
+
 type WindowSizeCommand struct {
     ClientTag   string
     Size        *WindowSize
@@ -178,3 +183,4 @@ func (qe* CommandAck)               Event() int { return COMMAND_ACK }
 func (qe* InitFailedEvent)          Event() int { return ERROR_INIT_FAIL }
 func (qe* DeviceFailed)             Event() int { return ERROR_QMP_FAIL }
 func (qe* Interrupted)              Event() int { return ERROR_INTERRUPTED }
+func (qe* CommandError)             Event() int { return ERROR_CMD_FAIL }

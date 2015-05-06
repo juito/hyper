@@ -44,6 +44,7 @@ const(
     ERROR_INIT_FAIL
     ERROR_QMP_FAIL
     ERROR_INTERRUPTED
+    ERROR_CMD_FAIL
 )
 
 const(
@@ -115,6 +116,7 @@ func EventString(ev int) string {
         case ERROR_INIT_FAIL: return "ERROR_INIT_FAIL"
         case ERROR_QMP_FAIL: return "ERROR_QMP_FAIL"
         case ERROR_INTERRUPTED: return "ERROR_INTERRUPTED"
+        case ERROR_CMD_FAIL: return "ERROR_CMD_FAIL"
     }
     return "UNKNOWN"
 }
