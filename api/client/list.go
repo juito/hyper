@@ -7,8 +7,8 @@ import (
 	"net/url"
 	"dvm/engine"
     "dvm/api/pod"
+	gflag "github.com/jessevdk/go-flags"
 )
-
 
 func (cli *DvmClient) DvmCmdList(args ...string) error {
 	var item string
@@ -16,6 +16,13 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 		item = "pod"
 	} else {
 		item = args[0]
+	}
+
+	var parser = gflag.NewParser(nil, gflag.Default)
+	parser.Usage = "list [pod|vm|container]\n\nDisplay the POD, VM or container information"
+	args, err := parser.Parse()
+	if err != nil {
+		return nil
 	}
 
 	if item != "pod" && item != "vm" && item != "container" {
@@ -70,31 +77,27 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	if item == "vm" {
 		fmt.Printf("     VM name\n")
 		for _, vm := range vmResponse {
-			vmid  := vm[:strings.Index(vm, "-")]
+			vmid  := vm[:strings.Index(vm, ":")]
 			fmt.Printf("%15s\n", vmid)
 		}
 	}
 
 	if item == "pod" {
-		fmt.Printf("     POD ID              POD Name                   VM name\n")
+		fmt.Printf("%15s%25s%20s%10s\n", "POD ID", "POD Name", "VM name", "Status")
 		for i, vm := range vmResponse {
-			podid := vm[strings.Index(vm, "-")+1:]
-			vmid  := vm[:strings.Index(vm, "-")]
+			fields := strings.Split(vm, ":")
 			if err := json.Unmarshal([]byte(podResponse[i]), &tempPod); err != nil {
 				return err
 			}
-			fmt.Printf("%15s%25s%20s\n", podid, tempPod.Name, vmid)
+			fmt.Printf("%15s%25s%20s%10s\n", fields[1], tempPod.Name, fields[0], fields[2])
 		}
 	}
 
 	if item == "container" {
-		fmt.Printf("     Container ID                                                   POD ID          Status\n")
+		fmt.Printf("%-66s%15s%10s\n", "Container ID", "POD ID", "Status")
 		for _, c := range containerResponse {
 			fields := strings.Split(c, ":")
-			containerId := fields[0]
-			podId := fields[1]
-			status := fields[2]
-			fmt.Printf("%s%25s%20s\n", containerId, podId, status)
+			fmt.Printf("%-66s%15s%10s\n", fields[0], fields[1], fields[2])
 		}
 	}
 	return nil

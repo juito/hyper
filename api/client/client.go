@@ -64,7 +64,7 @@ func (cli *DvmClient) Cmd(args ...string) error {
 	if len(args) > 0 {
 		method, exists := cli.getMethod(args[0])
 		if !exists {
-			fmt.Printf("DVM: '%s' is not a docker command. See 'docker --help'.\n", args[0])
+			fmt.Printf("DVM: '%s' is not a dvm command. See 'dvm --help'.\n", args[0])
 			os.Exit(1)
 		}
 		return method(args[1:]...)

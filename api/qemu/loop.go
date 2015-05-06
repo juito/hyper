@@ -410,6 +410,15 @@ func stateRunning(ctx *QemuContext, ev QemuEvent) {
                 } else {
                     glog.Warning("[Running] wrong reply to ", string(ack.reply), string(ack.msg))
                 }
+            case ERROR_CMD_FAIL:
+                ack := ev.(*CommandError)
+                if ack.context.code == INIT_EXECCMD {
+                    ctx.transition = nil
+                    cmd := ExecCommand{}
+                    json.Unmarshal(ack.context.message, &cmd)
+                    ctx.ptys.Close(ctx, cmd.Sequence)
+                    glog.V(0).Infof("Exec command %s on session %d failed", cmd.Command[0], cmd.Sequence)
+                }
             case COMMAND_ATTACH:
                 cmd := ev.(*AttachCommand)
                 idx := ctx.Lookup( cmd.Container )

@@ -12,13 +12,16 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 	if len(job.Args) == 0 {
 		return fmt.Errorf("Can not execute 'stop' command without any pod name!")
 	}
-	podID := job.Args[0]
+	podId := job.Args[0]
 
-	glog.V(1).Infof("Prepare to stop the POD: %s", podID)
+	glog.V(1).Infof("Prepare to stop the POD: %s", podId)
 	// We need find the vm id which running POD, and stop it
-	vmid, err := daemon.GetPodVmByName(podID)
+	vmid, err := daemon.GetPodVmByName(podId)
 	if err != nil {
 		return err
+	}
+	if daemon.podList[podId].Status != types.S_ONLINE {
+		return fmt.Errorf("The POD %s has aleady stopped, can not stop again!", podId)
 	}
 	qemuPodEvent, qemuStatus, err := daemon.GetQemuChan(string(vmid))
 	if err != nil {
@@ -40,7 +43,7 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 
 	// Prepare the qemu status to client
 	v := &engine.Env{}
-	v.Set("ID", podID)
+	v.Set("ID", podId)
 	v.SetInt("Code", qemuResponse.Code)
 	v.Set("Cause", qemuResponse.Cause)
 	if _, err := v.WriteTo(job.Stdout); err != nil {
@@ -48,8 +51,8 @@ func (daemon *Daemon) CmdStop(job *engine.Job) error {
 	}
 
 	defer func() {
-		daemon.DeletePodVmFromDB(podID)
-		daemon.DeletePodFromDB(podID)
+		daemon.podList[podId].Status = types.S_STOP
+		daemon.SetContainerStatus(podId, types.S_STOP)
 		daemon.DeleteQemuChan(string(vmid))
 	} ()
 

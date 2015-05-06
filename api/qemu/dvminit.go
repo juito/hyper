@@ -108,11 +108,18 @@ func waitCmdToInit(ctx *QemuContext, init *net.UnixConn) {
             glog.Info("vm channel closed, quit")
             break
         }
-        if cmd.code == INIT_ACK {
+        if cmd.code == INIT_ACK || cmd.code == INIT_ERROR{
             if len(cmds) > 0 {
-                ctx.hub <- &CommandAck{
-                    reply: cmds[0].code,
-                    msg:   cmd.message,
+                if cmd.code == INIT_ACK {
+                    ctx.hub <- &CommandAck{
+                        reply: cmds[0].code,
+                        msg:   cmd.message,
+                    }
+                } else {
+                    ctx.hub <- &CommandError{
+                        context: cmds[0],
+                        msg:    cmd.message,
+                    }
                 }
                 cmds = cmds[1:]
             } else {
@@ -135,7 +142,7 @@ func waitInitAck(ctx *QemuContext, init *net.UnixConn) {
         if err != nil {
             ctx.hub <- &Interrupted{ reason: "dvminit socket failed " + err.Error(), }
             return
-        } else if res.code == INIT_ACK {
+        } else if res.code == INIT_ACK || res.code == INIT_ERROR {
             ctx.vm <- res
         }
     }

@@ -2,23 +2,64 @@ package main
 
 import (
 	"os"
-	"os/signal"
-	"syscall"
+	"fmt"
 	"flag"
+	"syscall"
+	"os/signal"
 
 	"dvm/api/daemon"
 	"dvm/engine"
 	"dvm/dvmversion"
 	"dvm/lib/glog"
+	"dvm/lib/goconfig"
 )
 
 func main() {
+	flConfig := flag.String("config", "", "Config file for DVM")
+	flHelp := flag.Bool("help", false, "Print help message for DVM daemon")
+	glog.Init()
+	flag.Usage = func() {printHelp()}
 	flag.Parse()
-	mainDaemon()
+	if *flHelp == true {
+		printHelp()
+		return
+	}
+	mainDaemon(*flConfig)
 }
 
-func mainDaemon() {
+func printHelp() {
+	var helpMessage = `Usage:
+  dvmd [OPTIONS]
+
+Application Options:
+  --config=""            configuration for DVM 
+  --v=0                  log level fro V logs
+  --logtostderr          log to standard error instead of files
+  --alsologtostderr      log to standard error as well as files
+
+Help Options:
+  -h, --help             Show this help message
+
+`
+	fmt.Printf(helpMessage)
+}
+
+func mainDaemon(config string) {
+	glog.V(0).Infof("The config file is %s", config)
 	eng := engine.New()
+	if config == "" {
+		config = "/etc/dvm/config"
+	}
+	cfg, err := goconfig.LoadConfigFile(config)
+	if err != nil {
+		glog.Errorf("Read config file (%s) failed, %s", config, err.Error())
+		return
+	}
+	kernel, _ := cfg.GetValue(goconfig.DEFAULT_SECTION, "Kernel")
+	initrd, _ := cfg.GetValue(goconfig.DEFAULT_SECTION, "Initrd")
+	glog.V(0).Infof("The config: kernel=%s, initrd=%s", kernel, initrd)
+	os.Setenv("Kernel", kernel)
+	os.Setenv("Initrd", initrd)
 	d, err := daemon.NewDaemon(eng)
 	if err != nil {
 		glog.Error("the daemon create failed, %s\n", err.Error())

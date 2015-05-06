@@ -38,6 +38,15 @@ type ttyMessage struct {
     message     []byte
 }
 
+func (tm *ttyMessage) toBuffer() []byte {
+    length := len(tm.message) + 12
+    buf := make([]byte, length)
+    binary.BigEndian.PutUint64(buf[:8], tm.session)
+    binary.BigEndian.PutUint32(buf[8:12], uint32(length))
+    copy(buf[12:], tm.message)
+    return buf
+}
+
 func newPts() *pseudoTtys {
     return &pseudoTtys{
         channel: make(chan *ttyMessage, 256),
@@ -91,8 +100,11 @@ func waitTtyMessage(ctx *QemuContext, conn *net.UnixConn) {
             glog.V(1).Info("tty chan closed, quit sent goroutine")
             break
         }
+
+        glog.V(3).Infof("trying to write to session %d", msg.session)
+
         if _,ok := ctx.ptys.ttys[msg.session]; ok {
-            _,err := conn.Write(msg.message)
+            _,err := conn.Write(msg.toBuffer())
             if err != nil {
                 glog.V(1).Info("Cannot write to tty socket: ", err.Error())
                 return
@@ -110,6 +122,8 @@ func waitPts(ctx *QemuContext) {
         }
         return
     }
+
+    glog.V(1).Info("tty socket connected")
 
     go waitTtyMessage(ctx, conn)
 
@@ -147,7 +161,6 @@ func newAttachments(idx int, persist bool) *ttyAttachments {
         attachments: []*TtyIO{},
     }
 }
-
 
 func newAttachmentsWithTty(idx int, persist bool, tty *TtyIO) *ttyAttachments {
     return &ttyAttachments{
@@ -241,7 +254,7 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint6
 
     if tty.Stdin != nil {
         go func() {
-            buf := make([]byte, 1)
+            buf := make([]byte, 32)
             defer pts.Detach(ctx, session, tty)
             for {
                 nr,err := tty.Stdin.Read(buf)
@@ -252,6 +265,8 @@ func (pts *pseudoTtys) ptyConnect(ctx *QemuContext, container int, session uint6
                     glog.Info("got stdin detach char, exit term")
                     return
                 }
+
+                glog.V(3).Infof("trying to input char: %d and %d chars", buf[0], nr)
 
                 pts.channel <- &ttyMessage{
                     session: session,
