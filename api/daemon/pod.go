@@ -14,21 +14,53 @@ import (
 
 func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	podArgs := job.Args[0]
+
+	vmid := fmt.Sprintf("vm-%s", pod.RandStr(10, "alpha"))
+	podid := fmt.Sprintf("pod-%s", pod.RandStr(10, "alpha"))
+
+	code, cause, err := daemon.CreatePod(podArgs, vmid, podid)
+	if err != nil {
+		return err
+	}
+	containers := []*Container{}
+	for _, v := range daemon.containerList {
+		if v.PodId == podid {
+			containers = append(containers, v)
+		}
+	}
+	pod := &Pod {
+		Id:           podid,
+		Vm:           vmid,
+		Containers:   containers,
+		Status:       types.S_ONLINE,
+	}
+	daemon.AddPod(pod)
+	// Prepare the qemu status to client
+	v := &engine.Env{}
+	v.Set("ID", podid)
+	v.SetInt("Code", code)
+	v.Set("Cause", cause)
+	if _, err := v.WriteTo(job.Stdout); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (daemon *Daemon) CreatePod(podArgs, vmid, podid string) (code int, cause string, err error) {
 	userPod, err := pod.ProcessPodBytes([]byte(podArgs))
 	if err != nil {
 		glog.V(1).Infof("Process POD file error: %s", err.Error())
-		return err
+		return -1, "", err
 	}
-	vmid := fmt.Sprintf("vm-%s", pod.RandStr(10, "alpha"))
-	podid := fmt.Sprintf("pod-%s", pod.RandStr(10, "alpha"))
 	// store the UserPod into the db
 	if err:= daemon.WritePodToDB(podid, []byte(podArgs)); err != nil {
 		glog.V(1).Info("Found an error while saveing the POD file")
-		return err
+		return -1, "", err
 	}
 	if err := daemon.WritePodAndVM(podid, vmid); err != nil {
 		glog.V(1).Info("Found an error while saveing the VM info")
-		return err
+		return -1, "", err
 	}
 	glog.V(1).Info("Began to run the QEMU process to start the VM!\n")
 	qemuPodEvent := make(chan qemu.QemuEvent, 128)
@@ -38,7 +70,7 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 	go qemu.QemuLoop(vmid, qemuPodEvent, qemuStatus, 1, 512, os.Getenv("Kernel"), os.Getenv("Initrd"))
 	if err := daemon.SetQemuChan(vmid, qemuPodEvent, qemuStatus); err != nil {
 		glog.V(1).Infof("SetQemuChan error: %s", err.Error())
-		return err
+		return -1, "", err
 	}
 	runPodEvent := &qemu.RunPodCommand {
 		Spec: userPod,
@@ -53,26 +85,16 @@ func (daemon *Daemon) CmdPod(job *engine.Job) error {
 			break
 		}
 	}
-
-	// XXX we should not close qemuStatus chan, it will be closed in shutdown process
-
-	// Prepare the qemu status to client
-	v := &engine.Env{}
-	v.Set("ID", podid)
-	v.SetInt("Code", qemuResponse.Code)
-	v.Set("Cause", qemuResponse.Cause)
 	if qemuResponse.Code == types.E_OK {
 		podData := qemuResponse.Data.(*qemu.RunningPod)
 		for _, c := range podData.Containers {
 			fmt.Printf("c.id = %s\n", c.Id)
-			daemon.SetPodByContainer(c.Id, podid, "", "", make([]string, 0))
+			daemon.SetPodByContainer(c.Id, podid, "", "", make([]string, 0), types.S_ONLINE)
 		}
 	}
-	if _, err := v.WriteTo(job.Stdout); err != nil {
-		return err
-	}
+	// XXX we should not close qemuStatus chan, it will be closed in shutdown process
 
-	return nil
+	return qemuResponse.Code, qemuResponse.Cause, nil
 }
 
 func (daemon *Daemon) CmdPodInfo(job *engine.Job) error {

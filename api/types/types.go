@@ -14,6 +14,12 @@ const (
     E_QMP_COMMAND_FAIL
 )
 
+// status for POD or container
+const (
+    S_ONLINE = iota
+    S_STOP = iota
+)
+
 type QemuResponse struct {
     VmId string
     Code int

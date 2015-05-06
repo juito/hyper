@@ -4,23 +4,33 @@ import (
 	"fmt"
 	"os"
 	"runtime"
+	"strings"
 	apiserver "dvm/api/server"
 	"dvm/engine"
 	"dvm/lib/portallocator"
 	"dvm/api/docker"
 	"dvm/api/network"
 	"dvm/lib/glog"
+	"dvm/api/pod"
 
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/util"
 )
 
+type Pod struct {
+	Id              string
+	Vm              string
+	Containers      []*Container
+	Status          uint
+}
+
 type Container struct {
+	Id              string
 	Name            string
 	PodId           string
 	Image           string
 	Cmds            []string
-	Status          string
+	Status          uint
 }
 
 type Daemon struct {
@@ -29,6 +39,7 @@ type Daemon struct {
 	eng              *engine.Engine
 	dockerCli		 *docker.DockerCli
 	containerList    map[string]*Container
+	podList          map[string]*Pod
 	qemuChan         map[string]interface{}
 	qemuClientChan   map[string]interface{}
 }
@@ -53,6 +64,46 @@ func (daemon *Daemon) Install(eng *engine.Engine) error {
 		glog.V(3).Infof("Engine Register: name= %s\n", name)
 		if err := eng.Register(name, method); err != nil {
 			return err
+		}
+	}
+	return nil
+}
+
+func (daemon *Daemon) Restore() error {
+	if daemon.GetPodNum() == 0 {
+		return nil
+	}
+
+	podList := map[string]string{}
+
+	iter := (daemon.db).NewIterator(util.BytesPrefix([]byte("pod-")), nil)
+	for iter.Next() {
+		key := iter.Key()
+		value := iter.Value()
+		if strings.Contains(string(key), "pod-vm-") {
+			err := (daemon.db).Delete(key, nil)
+			if err != nil {
+				return err
+			}
+			continue
+		}
+		glog.V(1).Infof("Get the pod item, pod is %s!", key)
+		err := (daemon.db).Delete(key, nil)
+		if err != nil {
+			return err
+		}
+		podList[string(key)[4:]] = string(value)
+	}
+	iter.Release()
+	err := iter.Error()
+	if err != nil {
+		return err
+	}
+	for k, v := range podList {
+		vmid := fmt.Sprintf("vm-%s", pod.RandStr(10, "alpha"))
+		_, _, err = daemon.CreatePod(v, vmid, k)
+		if err != nil {
+			glog.Warning("Got a unexpected error, %s", err.Error())
 		}
 	}
 	return nil
@@ -115,12 +166,14 @@ func NewDaemonFromDirectory(eng *engine.Engine) (*Daemon, error) {
 	qemuchan := make(map[string]interface{}, 100)
 	qemuclient := make(map[string]interface{}, 100)
 	cList := make(map[string]*Container, 100)
+	pList := make(map[string]*Pod, 100)
 	daemon := &Daemon{
 		ID:               string(os.Getpid()),
 		db:               db,
 		eng:              eng,
 		dockerCli:		  dockerCli,
 		containerList:    cList,
+		podList:          pList,
 		qemuChan:         qemuchan,
 		qemuClientChan:   qemuclient,
 	}
@@ -228,12 +281,14 @@ func (daemon *Daemon) SetQemuChan(vmid string, qemuchan, qemuclient interface{})
 	return fmt.Errorf("Already find a Qemu chan for vm: %s!", vmid)
 }
 
-func (daemon *Daemon) SetPodByContainer(containerId, podId, name, image string, cmds []string) error {
+func (daemon *Daemon) SetPodByContainer(containerId, podId, name, image string, cmds []string, status uint) error {
 	container := &Container {
+		Id:               containerId,
 		Name:             name,
 		PodId:            podId,
 		Image:            image,
 		Cmds:             cmds,
+		Status:           status,
 	}
 	daemon.containerList[containerId] = container
 
@@ -249,8 +304,27 @@ func (daemon *Daemon) GetPodByContainer(containerId string) (string, error) {
 	return container.PodId, nil
 }
 
+func (daemon *Daemon) AddPod(pod *Pod) {
+	daemon.podList[pod.Id] = pod
+}
+
+func (daemon *Daemon) SetContainerStatus(podId string, status uint) {
+	for _, v := range daemon.containerList {
+		if v.PodId == podId {
+			v.Status = status
+		}
+	}
+}
+
 func (daemon *Daemon) shutdown() error {
 	glog.V(0).Info("The daemon will be shutdown\n")
+	// we need to delete all containers associated with the POD
+/*  FIXME can not remove container now
+	for cId, _ := range daemon.containerList {
+		glog.V(1).Infof("Ready to rm container: %s", cId)
+		(daemon.dockerCli).SendCmdDelete(cId)
+	}
+*/
 	(daemon.db).Close()
 	glog.Flush()
 	return nil

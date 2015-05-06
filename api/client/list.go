@@ -70,20 +70,19 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 	if item == "vm" {
 		fmt.Printf("     VM name\n")
 		for _, vm := range vmResponse {
-			vmid  := vm[:strings.Index(vm, "-")]
+			vmid  := vm[:strings.Index(vm, ":")]
 			fmt.Printf("%15s\n", vmid)
 		}
 	}
 
 	if item == "pod" {
-		fmt.Printf("     POD ID              POD Name                   VM name\n")
+		fmt.Printf("     POD ID              POD Name                   VM name          Status\n")
 		for i, vm := range vmResponse {
-			podid := vm[strings.Index(vm, "-")+1:]
-			vmid  := vm[:strings.Index(vm, "-")]
+			fields := strings.Split(vm, ":")
 			if err := json.Unmarshal([]byte(podResponse[i]), &tempPod); err != nil {
 				return err
 			}
-			fmt.Printf("%15s%25s%20s\n", podid, tempPod.Name, vmid)
+			fmt.Printf("%15s%25s%20s%10s\n", fields[1], tempPod.Name, fields[0], fields[2])
 		}
 	}
 
@@ -91,10 +90,7 @@ func (cli *DvmClient) DvmCmdList(args ...string) error {
 		fmt.Printf("     Container ID                                                   POD ID          Status\n")
 		for _, c := range containerResponse {
 			fields := strings.Split(c, ":")
-			containerId := fields[0]
-			podId := fields[1]
-			status := fields[2]
-			fmt.Printf("%s%25s%20s\n", containerId, podId, status)
+			fmt.Printf("%s%25s%20s\n", fields[0], fields[1], fields[2])
 		}
 	}
 	return nil
