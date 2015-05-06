@@ -387,7 +387,8 @@ type flushSyncWriter interface {
 	io.Writer
 }
 
-func init() {
+func Init() {
+
 	flag.BoolVar(&logging.toStderr, "logtostderr", false, "log to standard error instead of files")
 	flag.BoolVar(&logging.alsoToStderr, "alsologtostderr", true, "log to standard error as well as files")
 	flag.Var(&logging.verbosity, "v", "log level for V logs")

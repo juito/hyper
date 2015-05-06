@@ -32,7 +32,7 @@ func (cli *DvmClient) DvmCmdRun(args ...string) error {
 
 	args, err := gflag.ParseArgs(&opts, args)
 	if err != nil {
-		return err
+		return nil
 	}
 	if len(args) == 0 {
 		return fmt.Errorf("DVM: \"run\" requires a minimum of 1 argument, please provide the image.")

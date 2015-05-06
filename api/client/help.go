@@ -2,27 +2,28 @@ package client
 
 import (
 	"fmt"
-	"os"
 )
 
 func (cli *DvmClient) DvmCmdHelp(args ...string) error {
-	if len(args) > 1 {
-		method, exists := cli.getMethod(args[:2]...)
-		if exists {
-			method("--help")
-			return nil
-		}
-	}
-	if len(args) > 0 {
-		method, exists := cli.getMethod(args[0])
-		if !exists {
-			fmt.Printf("docker: '%s' is not a docker command. See 'docker --help'.\n", args[0])
-			os.Exit(1)
-		} else {
-			method("--help")
-			return nil
-		}
-	}
+	var helpMessage = `Usage:
+  dvmcli [OPTIONS] COMMAND [ARGS...]
 
+Command:
+  attach                 Attach to a running container
+  create                 Create a new container
+  exec                   Run a command in a running container
+  info                   Display system-wide information
+  list                   List the PODs, VMs or containers
+  pod                    Create a new POD
+  pull                   Pull an image or a repository from a Docker registry server
+  run                    Run a command in a new container
+  stop                   Stop a running container
+
+Help Options:
+  -h, --help             Show this help message
+
+Run 'dvm COMMAND --help' for more information on a command.
+`
+	fmt.Printf(helpMessage)
 	return nil
 }

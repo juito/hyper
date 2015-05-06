@@ -2,9 +2,10 @@ package main
 
 import (
 	"os"
-	"os/signal"
-	"syscall"
+	"fmt"
 	"flag"
+	"syscall"
+	"os/signal"
 
 	"dvm/api/daemon"
 	"dvm/engine"
@@ -14,9 +15,33 @@ import (
 )
 
 func main() {
-	flConfig := flag.String("config", "/etc/dvm/config", "Configuration for DVM")
+	flConfig := flag.String("config", "", "Config file for DVM")
+	flHelp := flag.Bool("help", false, "Print help message for DVM daemon")
+	glog.Init()
+	flag.Usage = func() {printHelp()}
 	flag.Parse()
+	if *flHelp == true {
+		printHelp()
+		return
+	}
 	mainDaemon(*flConfig)
+}
+
+func printHelp() {
+	var helpMessage = `Usage:
+  dvmd [OPTIONS]
+
+Application Options:
+  --config=""            configuration for DVM 
+  --v=0                  log level fro V logs
+  --logtostderr          log to standard error instead of files
+  --alsologtostderr      log to standard error as well as files
+
+Help Options:
+  -h, --help             Show this help message
+
+`
+	fmt.Printf(helpMessage)
 }
 
 func mainDaemon(config string) {
