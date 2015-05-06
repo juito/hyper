@@ -30,7 +30,9 @@ func (cli *DvmClient) DvmCmdRun(args ...string) error {
 		RestartPolicy   string   `short:"r" long:"restart" default:"never" value-name:"\"\"" default-mask:"-" description:"Restart policy to apply when a container exits (no, on-failure[:max-retry], always)"`
 	}
 
-	args, err := gflag.ParseArgs(&opts, args)
+	var parser = gflag.NewParser(&opts, gflag.Default)
+	parser.Usage = "run [OPTIONS] IMAGE [COMMAND] [ARG...]"
+	args, err := parser.Parse()
 	if err != nil {
 		return nil
 	}
@@ -38,12 +40,12 @@ func (cli *DvmClient) DvmCmdRun(args ...string) error {
 		return fmt.Errorf("DVM: \"run\" requires a minimum of 1 argument, please provide the image.")
 	}
 	var (
-		image = args[0]
+		image = args[1]
 		command = []string{}
 		env = []pod.UserEnvironmentVar{}
 	)
-	if len(args) > 1 {
-		command = args[1:]
+	if len(args) > 2 {
+		command = args[2:]
 	}
 	for _, v := range opts.Env {
 		userEnv := pod.UserEnvironmentVar {
