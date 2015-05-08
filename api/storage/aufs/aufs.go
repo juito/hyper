@@ -45,7 +45,7 @@ func MountContainerToSharedDir(containerId, rootDir, sharedDir, mountLabel strin
         mountPoint = path.Join(sharedDir, containerId, "rootfs")
     )
 
-	layers, err := getParentDiffPaths(containerId, rootDir)
+	diffs, err := getParentDiffPaths(containerId, rootDir)
 	if err != nil {
 		return "", err
 	}
@@ -53,7 +53,7 @@ func MountContainerToSharedDir(containerId, rootDir, sharedDir, mountLabel strin
 		return "", err
 	}
 
-	if err := aufsMount(layers, path.Join(diffPath, containerId), mountPoint, mountLabel); err != nil {
+	if err := aufsMount(diffs, path.Join(diffPath, containerId), mountPoint, mountLabel); err != nil {
 		return "", fmt.Errorf("DVM ERROR: error creating aufs mount to %s: %v", mountPoint, err)
 	}
 
@@ -235,8 +235,9 @@ func useDirperm() bool {
 
 func aufsUnmount(target string) error {
 	glog.V(1).Infof("Ready to unmount the target : %s", target)
-    if err := exec.Command("auplink", target, "flush").Run(); err != nil {
-        glog.Errorf("Couldn't run auplink command : %s", err.Error())
+    cmd := exec.Command("/bin/sh", "-c", "auplink", target, "flush")
+	if output, err := cmd.CombinedOutput(); err != nil {
+        glog.Warningf("Couldn't run auplink command : %s", output)
     }
     if err := syscall.Unmount(target, 0); err != nil {
         return err
