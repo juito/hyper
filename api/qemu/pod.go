@@ -73,14 +73,6 @@ type PreparingItem interface {
     ItemType() string
 }
 
-type ContainerInfo struct {
-    Id      string
-    Fstype  string
-    Images  []string
-    Workdir string
-    Cmd     string
-}
-
 func (p *VmPod) runningInfo() *RunningPod {
     containers := make([]RunningContainer, len(p.Containers))
     for idx, c := range p.Containers {
