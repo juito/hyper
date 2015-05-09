@@ -26,10 +26,14 @@ type InitConnectedEvent struct {
 
 type RunPodCommand struct {
     Spec *pod.UserPod
+    Containers []*ContainerInfo
+    Volumes    []*VolumeInfo
 }
 
 type ReplacePodCommand struct {
     NewSpec *pod.UserPod
+    Containers []*ContainerInfo
+    Volumes    []*VolumeInfo
 }
 
 type ExecCommand struct {
@@ -75,12 +79,31 @@ type ContainerCreatedEvent struct {
     Envs    map[string]string
 }
 
+type ContainerInfo struct {
+    Id      string
+    Rootfs  string
+    Image   string          // if fstype is `dir`, this should be a path relative to share_dir
+    // which described the mounted aufs or overlayfs dir.
+    Fstype  string
+    Workdir string
+    Entrypoint []string
+    Cmd     []string
+    Envs    map[string]string
+}
+
 type ContainerUnmounted struct {
     Index   int
     Success bool
 }
 
 type VolumeReadyEvent struct {
+    Name        string      //volumen name in spec
+    Filepath    string      //block dev absolute path, or dir path relative to share dir
+    Fstype      string      //"xfs", "ext4" etc. for block dev, or "dir" for dir path
+    Format      string      //"raw" (or "qcow2") for volume, no meaning for dir path
+}
+
+type VolumeInfo struct {
     Name        string      //volumen name in spec
     Filepath    string      //block dev absolute path, or dir path relative to share dir
     Fstype      string      //"xfs", "ext4" etc. for block dev, or "dir" for dir path

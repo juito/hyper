@@ -52,8 +52,9 @@ func CreateNewDevice(containerId, devPrefix, rootPath string) error {
 	poolName := fmt.Sprintf("/dev/mapper/%s-pool", devPrefix)
 	createDeviceCmd := fmt.Sprintf("dmsetup create %s --table \"0 %d thin %s %d\"", devName, deviceSize/512, poolName, deviceId)
 	createDeviceCommand := exec.Command("/bin/sh", "-c", createDeviceCmd)
-	_, err = createDeviceCommand.Output()
+	output, err := createDeviceCommand.Output()
 	if err != nil {
+		glog.Error(output)
 		return err
 	}
 
@@ -172,6 +173,12 @@ func ProbeFsType(device string) (string, error) {
 
 	if strings.Contains(string(fileCmdOutput), "ext4") {
 		return "ext4", nil
+	}
+	if strings.Contains(string(fileCmdOutput), "ext2") {
+		return "ext2", nil
+	}
+	if strings.Contains(string(fileCmdOutput), "ext3") {
+		return "ext3", nil
 	}
 	if strings.Contains(string(fileCmdOutput), "xfs") {
 		return "xfs", nil
