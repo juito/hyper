@@ -2,66 +2,59 @@ package daemon
 
 import (
 	"fmt"
-	"hyper/engine"
-	"hyper/hypervisor"
-	"hyper/lib/glog"
-	"hyper/types"
+	"io"
+
+	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/golang/glog"
+
+	"github.com/hyperhq/runv/hypervisor"
+	"github.com/hyperhq/runv/hypervisor/types"
 )
 
-func (daemon *Daemon) CmdAttach(job *engine.Job) (err error) {
-	if len(job.Args) == 0 {
-		return fmt.Errorf("Can not execute 'attach' command without any container/pod ID!")
-	}
-	if len(job.Args) == 1 {
-		return fmt.Errorf("Can not execute 'attach' command without any command!")
-	}
-	typeKey := job.Args[0]
-	typeVal := job.Args[1]
-	tag := job.Args[2]
-	var podName string
-
-	// We need find the vm id which running POD, and stop it
-	if typeKey == "pod" {
-		podName = typeVal
-	} else {
-		container := typeVal
-		podName, err = daemon.GetPodByContainer(container)
-		if err != nil {
-			return
-		}
-	}
-	vmid, err := daemon.GetPodVmByName(podName)
-	if err != nil {
-		return err
-	}
+func (daemon *Daemon) Attach(stdin io.ReadCloser, stdout io.WriteCloser, container string) error {
 	var (
-		ttyIO        hypervisor.TtyIO
-		qemuCallback = make(chan *types.QemuResponse, 1)
+		vmId string
+		err  error
 	)
 
-	ttyIO.Stdin = job.Stdin
-	ttyIO.Stdout = job.Stdout
-	ttyIO.ClientTag = tag
-	ttyIO.Callback = qemuCallback
+	tty := &hypervisor.TtyIO{
+		Stdin:    stdin,
+		Stdout:   stdout,
+		Callback: make(chan *types.VmResponse, 1),
+	}
 
-	var attachCommand = &hypervisor.AttachCommand{
-		Streams: &ttyIO,
-		Size:    nil,
-	}
-	if typeKey == "pod" {
-		attachCommand.Container = ""
-	} else {
-		attachCommand.Container = typeVal
-	}
-	qemuEvent, _, _, err := daemon.GetQemuChan(vmid)
+	pod, idx, err := daemon.GetPodByContainerIdOrName(container)
 	if err != nil {
 		return err
 	}
-	qemuEvent.(chan hypervisor.VmEvent) <- attachCommand
 
-	<-qemuCallback
+	vmId, err = daemon.GetVmByPodId(pod.Id)
+	if err != nil {
+		return err
+	}
+
+	vm, ok := daemon.VmList.Get(vmId)
+	if !ok {
+		err = fmt.Errorf("Can find VM whose Id is %s!", vmId)
+		return err
+	}
+
+	if !pod.Spec.Containers[idx].Tty {
+		tty.Stderr = stdcopy.NewStdWriter(stdout, stdcopy.Stderr)
+		tty.Stdout = stdcopy.NewStdWriter(stdout, stdcopy.Stdout)
+		tty.OutCloser = stdout
+	}
+
+	err = vm.Attach(tty, container, nil)
+	if err != nil {
+		return err
+	}
+
 	defer func() {
-		glog.V(2).Info("Defer function for exec!")
+		glog.V(2).Info("Defer function for attach!")
 	}()
-	return nil
+
+	err = tty.WaitForFinish()
+
+	return err
 }

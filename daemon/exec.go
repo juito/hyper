@@ -1,80 +1,109 @@
 package daemon
 
 import (
-	"encoding/json"
 	"fmt"
+	"io"
 
-	"hyper/engine"
-	"hyper/hypervisor"
-	"hyper/lib/glog"
-	"hyper/types"
+	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/golang/glog"
+
+	"github.com/hyperhq/hyperd/utils"
+	"github.com/hyperhq/runv/hypervisor"
+	"github.com/hyperhq/runv/hypervisor/types"
 )
 
-func (daemon *Daemon) CmdExec(job *engine.Job) (err error) {
-	if len(job.Args) == 0 {
-		return fmt.Errorf("Can not execute 'exec' command without any container ID!")
-	}
-	if len(job.Args) == 1 {
-		return fmt.Errorf("Can not execute 'exec' command without any command!")
-	}
-	var (
-		typeKey = job.Args[0]
-		typeVal = job.Args[1]
-		tag     = job.Args[3]
-		vmId    string
-		podId   string
-		command = []string{}
-	)
+func (daemon *Daemon) ExitCode(containerId, execId string) (int, error) {
+	glog.V(1).Infof("Get container id %s, exec id %s", containerId, execId)
 
-	if job.Args[2] != "" {
-		if err = json.Unmarshal([]byte(job.Args[2]), &command); err != nil {
-			return err
+	pod, _, err := daemon.GetPodByContainerIdOrName(containerId)
+	if err != nil {
+		return -1, err
+	}
+
+	status := pod.Status()
+	if status == nil {
+		return -1, fmt.Errorf("cannot find status of pod %s", pod.Id)
+	}
+
+	if execId != "" {
+		if es := status.GetExec(execId); es != nil {
+			return int(es.ExitCode), nil
 		}
+		return -1, fmt.Errorf("cannot find exec %s", execId)
 	}
 
-	// We need find the vm id which running POD, and stop it
-	if typeKey == "pod" {
-		vmId = typeVal
-	} else {
-		container := typeVal
-		glog.V(1).Infof("Get container id is %s", container)
-		podId, err = daemon.GetPodByContainer(container)
-		if err != nil {
-			return
-		}
-		vmId, err = daemon.GetPodVmByName(podId)
+	if cs := status.GetContainer(containerId); cs != nil {
+		return int(cs.ExitCode), nil
 	}
 
+	return -1, fmt.Errorf("cannot find container %s", containerId)
+}
+
+func (daemon *Daemon) CreateExec(containerId, cmd string, terminal bool) (string, error) {
+	execId := fmt.Sprintf("exec-%s", utils.RandStr(10, "alpha"))
+
+	glog.V(1).Infof("Get container id is %s", containerId)
+	pod, _, err := daemon.GetPodByContainerIdOrName(containerId)
+	if err != nil {
+		return "", err
+	}
+
+	status := pod.Status()
+	if status == nil || status.Status != types.S_POD_RUNNING {
+		return "", fmt.Errorf("container %s is not running", containerId)
+	}
+
+	status.AddExec(containerId, execId, cmd, terminal)
+	return execId, nil
+}
+
+func (daemon *Daemon) StartExec(stdin io.ReadCloser, stdout io.WriteCloser, containerId, execId string) error {
+	tty := &hypervisor.TtyIO{
+		Stdin:    stdin,
+		Stdout:   stdout,
+		Callback: make(chan *types.VmResponse, 1),
+	}
+
+	glog.V(1).Infof("Get container id is %s", containerId)
+	pod, _, err := daemon.GetPodByContainerIdOrName(containerId)
 	if err != nil {
 		return err
 	}
 
-	execCmd := &hypervisor.ExecCommand{
-		Command: command,
-		Streams: &hypervisor.TtyIO{
-			Stdin:     job.Stdin,
-			Stdout:    job.Stdout,
-			ClientTag: tag,
-			Callback:  make(chan *types.QemuResponse, 1),
-		},
+	status := pod.Status()
+	if status == nil || status.Status != types.S_POD_RUNNING {
+		return fmt.Errorf("container %s is not running", containerId)
 	}
 
-	if typeKey == "pod" {
-		execCmd.Container = ""
-	} else {
-		execCmd.Container = typeVal
+	es := status.GetExec(execId)
+	if es == nil {
+		return fmt.Errorf("Can not find exec %s", execId)
 	}
 
-	qemuEvent, _, _, err := daemon.GetQemuChan(vmId)
+	vmId, err := daemon.GetVmByPodId(pod.Id)
 	if err != nil {
 		return err
 	}
 
-	qemuEvent.(chan hypervisor.VmEvent) <- execCmd
+	vm, ok := daemon.VmList.Get(vmId)
+	if !ok {
+		err = fmt.Errorf("Can not find VM whose Id is %s!", vmId)
+		return err
+	}
 
-	<-execCmd.Streams.Callback
+	if !es.Terminal {
+		tty.Stderr = stdcopy.NewStdWriter(stdout, stdcopy.Stderr)
+		tty.Stdout = stdcopy.NewStdWriter(stdout, stdcopy.Stdout)
+		tty.OutCloser = stdout
+	}
+
+	if err := vm.Exec(es.Container, es.Id, es.Cmds, es.Terminal, tty); err != nil {
+		return err
+	}
+
 	defer func() {
 		glog.V(2).Info("Defer function for exec!")
 	}()
+
 	return nil
 }

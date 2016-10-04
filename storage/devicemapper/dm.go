@@ -1,18 +1,20 @@
+// +build linux
+
 package devicemapper
 
 import (
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/ioutil"
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"syscall"
 
-	"hyper/lib/glog"
+	"github.com/golang/glog"
+	"github.com/hyperhq/hyperd/storage"
 )
 
 type jsonMetadata struct {
@@ -30,6 +32,7 @@ func MountContainerToSharedDir(containerId, sharedDir, devPrefix string) (string
 }
 
 func CreateNewDevice(containerId, devPrefix, rootPath string) error {
+	//TODO use container.Mount or something Other
 	var metadataPath = fmt.Sprintf("%s/metadata/", rootPath)
 	// Get device id from the metadata file
 	idMetadataFile := path.Join(metadataPath, containerId)
@@ -51,22 +54,19 @@ func CreateNewDevice(containerId, devPrefix, rootPath string) error {
 	poolName := fmt.Sprintf("/dev/mapper/%s-pool", devPrefix)
 	createDeviceCmd := fmt.Sprintf("dmsetup create %s --table \"0 %d thin %s %d\"", devName, deviceSize/512, poolName, deviceId)
 	createDeviceCommand := exec.Command("/bin/sh", "-c", createDeviceCmd)
-	output, err := createDeviceCommand.Output()
+	output, err := createDeviceCommand.CombinedOutput()
 	if err != nil {
-		glog.Error(output)
+		glog.Error(string(output))
 		return err
 	}
 	return nil
 }
 
-func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm, uid, gid string) error {
+func InjectFile(src io.Reader, containerId, devPrefix, target, rootPath string, perm, uid, gid int) error {
 	if containerId == "" {
 		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
 	}
-	permInt, err := strconv.Atoi(perm)
-	if err != nil {
-		return err
-	}
+	permDir := perm | 0111
 	// Define the basic directory, need to get them via the 'info' command
 	var (
 		mntPath = fmt.Sprintf("%s/mnt/", rootPath)
@@ -76,11 +76,11 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm, uid, g
 	// Get the mount point for the container ID
 	idMountPath := path.Join(mntPath, containerId)
 	rootFs := path.Join(idMountPath, "rootfs")
-	targetDir := path.Join(rootFs, toDir)
+	targetFile := path.Join(rootFs, target)
 
 	// Whether we have the mounter directory
 	if _, err := os.Stat(idMountPath); err != nil && os.IsNotExist(err) {
-		if err := os.MkdirAll(idMountPath, os.FileMode(permInt)); err != nil {
+		if err := os.MkdirAll(idMountPath, os.FileMode(permDir)); err != nil {
 			return err
 		}
 	}
@@ -92,7 +92,7 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm, uid, g
 	if err != nil {
 		return err
 	}
-	glog.V(3).Infof("The filesytem type is %s\n", fstype)
+	glog.V(3).Infof("The filesytem type is %s", fstype)
 	options := ""
 	if fstype == "xfs" {
 		// XFS needs nouuid or it can't mount filesystems with the same fs
@@ -106,53 +106,9 @@ func AttachFiles(containerId, devPrefix, fromFile, toDir, rootPath, perm, uid, g
 	if err != nil {
 		return fmt.Errorf("Error mounting '%s' on '%s': %s", devFullName, idMountPath, err)
 	}
+	defer syscall.Unmount(idMountPath, syscall.MNT_DETACH)
 
-	// It just need the block device without copying any files
-	if fromFile == "" || toDir == "" {
-		// we need to unmout the device from the mounted directory
-		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-		return nil
-	}
-	// Make a new file with the given premission and wirte the source file content in it
-	if _, err := os.Stat(fromFile); err != nil && os.IsNotExist(err) {
-		// The given file is not exist, we need to unmout the device and return
-		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-		return err
-	}
-	buf, err := ioutil.ReadFile(fromFile)
-	if err != nil {
-		// unmout the device
-		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-		return err
-	}
-	_, err = os.Stat(targetDir)
-	targetFile := targetDir
-	if err != nil && os.IsNotExist(err) {
-		// we need to create a target directory with given premission
-		if err := os.MkdirAll(targetDir, os.FileMode(permInt)); err != nil {
-			// we need to unmout the device
-			syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-			return err
-		}
-		targetFile = targetDir + "/" + filepath.Base(fromFile)
-	} else {
-		targetFile = targetDir + "/" + filepath.Base(fromFile)
-	}
-	err = ioutil.WriteFile(targetFile, buf, os.FileMode(permInt))
-	if err != nil {
-		// we need to unmout the device
-		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-		return err
-	}
-	user_id, _ := strconv.Atoi(uid)
-	group_id, _ := strconv.Atoi(gid)
-	if err = syscall.Chown(targetFile, user_id, group_id); err != nil {
-		syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-		return err
-	}
-	// finally we need to unmout the device
-	syscall.Unmount(idMountPath, syscall.MNT_DETACH)
-	return nil
+	return storage.WriteFile(src, targetFile, perm, uid, gid)
 }
 
 func ProbeFsType(device string) (string, error) {
@@ -160,9 +116,9 @@ func ProbeFsType(device string) (string, error) {
 	// will be used to test the type of filesystem which the device located.
 	cmd := fmt.Sprintf("file -sL %s", device)
 	command := exec.Command("/bin/sh", "-c", cmd)
-	fileCmdOutput, err := command.Output()
+	fileCmdOutput, err := command.CombinedOutput()
 	if err != nil {
-		return "", nil
+		return string(fileCmdOutput), err
 	}
 
 	if strings.Contains(strings.ToLower(string(fileCmdOutput)), "ext") {
@@ -172,7 +128,7 @@ func ProbeFsType(device string) (string, error) {
 		return "xfs", nil
 	}
 
-	return "", fmt.Errorf("Unknown filesystem type on %s", device)
+	return "", fmt.Errorf("Unknown filesystem type on %s, %s", device, string(fileCmdOutput))
 }
 
 func joinMountOptions(a, b string) string {
@@ -287,6 +243,20 @@ func CreateVolume(poolName, volName, dev_id string, size int, restore bool) erro
 		if res, err := exec.Command("/bin/sh", "-c", parms).CombinedOutput(); err != nil {
 			glog.Error(string(res))
 			return fmt.Errorf(string(res))
+		}
+	}
+	return nil
+}
+
+func UnmapVolume(deviceFullPath string) error {
+	args := fmt.Sprintf("dmsetup remove -f %s", deviceFullPath)
+	cmd := exec.Command("/bin/sh", "-c", args)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		glog.Warningf("Cannot umount device %s: %s, %s", deviceFullPath, err.Error(), output)
+		// retry
+		cmd := exec.Command("/bin/sh", "-c", args)
+		if err := cmd.Run(); err != nil {
+			return err
 		}
 	}
 	return nil

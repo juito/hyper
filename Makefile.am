@@ -1,18 +1,31 @@
-SUBDIRS=hypervisor
+export GOPATH:=$(abs_top_srcdir)/Godeps/_workspace:$(GOPATH)
 if WITH_XEN
-cgo_ldflags=CGO_LDFLAGS="-Lhypervisor/xen -lxenlight -lxenctrl -lhyperxl"
+XEN_BUILD_TAG=with_xen
 else
-cgo_ldflags=CGO_LDFLAGS="-Lhypervisor/xen-lhyperxl"
+XEN_BUILD_TAG=
 endif
 
-all-local: build-hyperd build-hyper
+if WITH_LIBVIRT
+LIBVIRT_BUILD_TAG=with_libvirt
+else
+LIBVIRT_BUILD_TAG=
+endif
+
+HYPER_BULD_TAGS=$(XEN_BUILD_TAG) $(LIBVIRT_BUILD_TAG) libdm_no_deferred_remove exclude_graphdriver_btrfs
+if ON_DARWIN
+SUBDIRS=mac_installer
+endif
+
+VERSION_PARAM=-ldflags "-X github.com/hyperhq/hyperd/utils.VERSION $(VERSION)"
+
+all-local: build-hyperd build-hyperctl
 clean-local:
-	-rm -f hyperd hyper
+	-rm -f hyperd hyperctl
 install-exec-local: 
-	$(INSTALL_PROGRAM) hyper $(bindir)
+	$(INSTALL_PROGRAM) hyperctl $(bindir)
 	$(INSTALL_PROGRAM) hyperd $(bindir)
 
 build-hyperd:
-	$(cgo_ldflags) godep go build hyperd.go
-build-hyper:
-	godep go build hyper.go
+	go build -tags "static_build $(HYPER_BULD_TAGS)" $(VERSION_PARAM) hyperd.go
+build-hyperctl:
+	go build $(VERSION_PARAM) hyperctl.go

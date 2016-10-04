@@ -24,6 +24,8 @@ missing
 hypervisor/xen/config.h
 hypervisor/xen/config.h.in
 hypervisor/xen/stamp-h1
+config.guess
+config.sub
 
 # Architecture specific extensions/prefixes
 *.[568vq]
@@ -43,6 +45,31 @@ _testmain.go
 
 # intellij idea configure
 .idea
-/hyper
+/hyperctl
 /hyperd
 *.out
+*.pkg
+mac_installer/dist/opt/hyper/bin/hyperctl
+mac_installer/dist/opt/hyper/bin/hyperd
+*.bak
+mac_installer/dist/opt/hyper/examples/*
+package/centos/rpm/BUILD/*
+package/centos/rpm/BUILDROOT/*
+package/centos/rpm/SOURCES/*
+package/centos/rpm/RPMS/*
+package/centos/rpm/SRPMS/*
+package/centos/centos-rpm.pod
+package/fedora/rpm/BUILD/*
+package/fedora/rpm/BUILDROOT/*
+package/fedora/rpm/SOURCES/*
+package/fedora/rpm/RPMS/*
+package/fedora/rpm/SRPMS/*
+package/fedora/fedora-rpm.pod
+Godeps/_workspace/src/github.com/golang/protobuf/protoc-gen-go/protoc-gen-go
+
+# supporting linux container on non-linux platform
+/Godeps/_workspace/src/github.com/opencontainers/specs/config-linux.go
+/Godeps/_workspace/src/github.com/opencontainers/specs/runtime-config-linux.go
+
+# binaries
+cmds/protoc-gen-gogo/protoc-gen-gogo

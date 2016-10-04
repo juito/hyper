@@ -1,19 +1,22 @@
+[![Build Status](https://travis-ci.org/hyperhq/hyperd.svg?branch=master)](https://travis-ci.org/hyperhq/hyperd)
 
-Hyper - Hypervisor-agnostic Docker Runtime
+HyperContainer - Hypervisor-agnostic Docker Runtime
 ====
 
-## What is Hyper?
+> This repo contains two parts: the daemon of HyperContainer `hyperd` and the CLI`hyperctl`.
 
-**Hyper is a hypervisor-agnostic tool that allows you to run Docker images on any hypervisor**.
+## What is HyperContainer?
 
-![](https://trello-attachments.s3.amazonaws.com/5551c49246960a31feab3d35/508x224/3b4cc5009489f917b7394a40b6cb57ec/upload_5_29_2015_at_12_56_51_AM.png)
+**HyperContainer is a hypervisor-agnostic technology that allows you to run Docker images on plain hypervisor**.
 
-## Why Hyper?
+![](https://trello-attachments.s3.amazonaws.com/5551c49246960a31feab3d35/1515x947/5265a9f72b589ef5dbf8b372b718c43e/Pasted_image_at_2016_04_16_07_33_PM.png)
+
+## Why HyperContainer?
 -----------
 
-**Hyper combines the best from both world: VM and Container**.
+**HyperContainer combines the best from both world: VM and Container**.
 
-| -  | Container | VM | Hyper | 
+| -  | Container | VM | HyperContainer | 
 |---|---|---|---|
 | Isolation | Weak, shared kernel | Strong, HW-enforced  | Strong, HW-enforced  |
 | Portable  | Yes, but kernel dependent sometimes | No, hypervisor dependent | Yes, hypervisor agnostic and portable image |
@@ -29,23 +32,18 @@ Hyper - Hypervisor-agnostic Docker Runtime
 
 ## Requirements
 
-- Docker 1.5 or later
 - QEMU 2.0 or later
 - Xen 4.5 and VT enabled host (for Xen support)
 
 ## Installation
 
 Ensure you are running Linux (kernel 3.8 or later) and have Docker
-(version 1.5 or later) and QEMU (version 2.0 or later) installed. Then install hyper with
+(version 1.5 or later) and QEMU (version 2.0 or later) installed. Then download the [binary tarball](https://hyper-install.s3.amazonaws.com/hyper-latest.tgz) and install it directly.
 
-    curl -sSL https://hyper.sh/install | bash
+For RHEL/CentOS 7.x, you can use our [RPMs](http://docs.hypercontainer.io/get_started/install/linux.html)
 
-Or download the [binary tarball](https://hyper-install.s3.amazonaws.com/hyper-latest.tgz) and install it directly.
-
-To run *hyper*, just type `hyper` if you've installed packages.
-
-For information on using the command line, just type `hyper`. You may use
-`hyper <command> --help` for detailed information on any specific command.
+For information on using the command line, just type `hyperctl`. You may use
+`hyperctl <command> --help` for detailed information on any specific command.
 
 
 ## Example
@@ -53,35 +51,33 @@ For information on using the command line, just type `hyper`. You may use
 
 ## Build From Source
 
-Clone hyper in GoPath
+Clone hyperd in GoPath
 
-    > cd ${GOPATH}/src
-	> git clone https://github.com/hyperhq/hyper.git hyper
+    > mkdir -p ${GOPATH}/src/github.com/hyperhq
+    > cd ${GOPATH}/src/github.com/hyperhq
+    > git clone https://github.com/hyperhq/hyperd.git hyperd
 
-And make sure you have `go` (>= 1.4), `godep`, and `autotools`, go into the `hyper` dir
+And make sure you have `go` (>= 1.4) , `device-mapper-devel`, and `autotools`, go into the `hyper` dir
 
     > ./autogen.sh
     > ./configure
     > make
 
-Then you can get the binaries `hyperd` daemon and `hyper` cmdline tool.
-
-You may also need the kernel and initrd from [HyperStart](https://github.com/hyperhq/hyperstart) to run your own hyper.
+Then you can find the binaries `hyperd` daemon and `hyperctl` cmdline tool in current directory. Before running those commands, a config file needs to be placed at `/etc/hyper/config` directory, and you can find a sample under `${TOP}/package/dist/etc/hyper/config`. `Kernel` and `Initrd` are required for starting the hyperd daemon, you can find those files from [HyperStart](https://github.com/hyperhq/hyperstart) project.
 
 
 ## Find out more
 
- * [Documentation](https://docs.hyper.sh)
- * [Get Started](https://docs.hyper.sh/get_started/index.html)
- * [Reference](https://docs.hyper.sh/reference/index.html)
- * [Release Notes](https://docs.hyper.sh/release_notes/latest.html)
+ * [Documentation](http://docs.hypercontainer.io)
+ * [Get Started](http://docs.hypercontainer.io/get_started/index.html)
+ * [Reference](http://docs.hypercontainer.io/reference/index.html)
+ * [Release Notes](http://docs.hypercontainer.io/release_notes/latest.html)
 
 ## Contact Us
 
 Found a bug, want to suggest a feature, or have a question?
-[File an issue](https://github.com/hyperhq/hyper/issues), or email <bug@hyper.sh>. When reporting a bug, please include which version of
-hyper you are running, as shown by `hyper --version`.
+[File an issue](https://github.com/hyperhq/hyperd/issues). When reporting a bug, please include which version of hyperd you are running, as shown by `hyperctl --version`.
 
 * Twitter: [@hyper_sh](https://twitter.com/hyper_sh)
-* Blog: [https://hyper.sh/blog.html](https://hyper.sh/blog.html)
-* IRC: [#hypersh](irc://chat.freenode.net:6667/#hypersh) ([web](http://webchat.freenode.net?channels=hypersh&uio=d4)) on freenode
+* Blog: [https://hyper.sh/blog.html](https://blog.hyper.sh/)
+* Slack: [#hyper](https://slack.hyper.sh/) (The IRC has been migrated to slack.)

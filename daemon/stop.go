@@ -2,100 +2,128 @@ package daemon
 
 import (
 	"fmt"
-	"hyper/engine"
-	"hyper/hypervisor"
-	"hyper/lib/glog"
-	"hyper/types"
+	"syscall"
+	"time"
+
+	"github.com/golang/glog"
+	"github.com/hyperhq/runv/hypervisor/types"
 )
 
-func (daemon *Daemon) CmdPodStop(job *engine.Job) error {
-	if len(job.Args) == 0 {
-		return fmt.Errorf("Can not execute 'stop' command without any pod name!")
-	}
-	podId := job.Args[0]
-	stopVm := job.Args[1]
-	code, cause, err := daemon.StopPod(podId, stopVm)
-	if err != nil {
-		return err
+func (daemon *Daemon) PodStopped(podId string) {
+	// find the vm id which running POD, and stop it
+	pod, ok := daemon.PodList.Get(podId)
+	if !ok {
+		glog.Errorf("Can not find pod(%s)", podId)
+		return
 	}
 
-	// Prepare the qemu status to client
-	v := &engine.Env{}
-	v.Set("ID", podId)
-	v.SetInt("Code", code)
-	v.Set("Cause", cause)
-	if _, err := v.WriteTo(job.Stdout); err != nil {
-		return err
-	}
+	pod.Lock()
+	defer pod.Unlock()
 
-	return nil
+	daemon.RemoveVm(pod.VM.Id)
+
+	pod.Cleanup(daemon)
 }
 
-func (daemon *Daemon) StopPod(podId, stopVm string) (int, string, error) {
-	glog.V(1).Infof("Prepare to stop the POD: %s", podId)
+func (daemon *Daemon) PodWait(podId string) {
 	// find the vm id which running POD, and stop it
-	if daemon.podList[podId].Status != types.S_POD_RUNNING {
-		return -1, "", fmt.Errorf("The POD %s has aleady stopped, can not stop again!", podId)
+	pod, ok := daemon.PodList.Get(podId)
+	if !ok {
+		glog.Errorf("Can not find pod(%s)", podId)
+		return
 	}
-	vmid, err := daemon.GetPodVmByName(podId)
-	if err != nil {
-		return -1, "", err
+
+	// wait until PodStopped() was called
+	for {
+		pod.Lock()
+		if pod.VM == nil {
+			break
+		}
+		pod.Unlock()
+		time.Sleep(100 * time.Millisecond)
 	}
+	pod.Unlock()
+}
+
+func (daemon *Daemon) StopPod(podId string) (int, string, error) {
+	glog.Infof("Prepare to stop the POD: %s", podId)
+	// find the vm id which running POD, and stop it
+	pod, ok := daemon.PodList.Get(podId)
+	if !ok {
+		glog.Errorf("Can not find pod(%s)", podId)
+		return -1, "", fmt.Errorf("Can not find pod(%s)", podId)
+	}
+
+	if !pod.TransitionLock("stop") {
+		glog.Errorf("Pod %s is under other operation", podId)
+		return -1, "", fmt.Errorf("Pod %s is under other operation", podId)
+	}
+	defer pod.TransitionUnlock("stop")
+
+	return daemon.StopPodWithinLock(pod)
+}
+
+func (daemon *Daemon) StopPodWithinLock(pod *Pod) (int, string, error) {
 	// we need to set the 'RestartPolicy' of the pod to 'never' if stop command is invoked
 	// for kubernetes
-	if daemon.podList[podId].Type == "kubernetes" {
-		daemon.podList[podId].RestartPolicy = "never"
-		if daemon.podList[podId].Vm == "" {
-			return types.E_VM_SHUTDOWN, "", nil
-		}
+	if pod.PodStatus.Type == "kubernetes" {
+		pod.PodStatus.RestartPolicy = "never"
 	}
-	qemuPodEvent, _, qemuStatus, err := daemon.GetQemuChan(vmid)
+
+	pod.Lock()
+	if pod.VM == nil {
+		pod.Unlock()
+		return types.E_VM_SHUTDOWN, "", nil
+	}
+
+	vm := pod.VM
+
+	if pod.PodStatus.Status != types.S_POD_RUNNING {
+		pod.Unlock()
+		glog.Errorf("Pod %s is not in running state, cannot be stopped", pod.Id)
+		return -1, "", fmt.Errorf("Pod %s is not in running state, cannot be stopped", pod.Id)
+	}
+
+	pod.Unlock()
+
+	vmResponse := vm.StopPod(pod.PodStatus)
+
+	return vmResponse.Code, vmResponse.Cause, nil
+}
+
+func (daemon *Daemon) StopContainer(container string) error {
+	pod, idx, ok := daemon.PodList.GetByContainerIdOrName(container)
+	if !ok {
+		return fmt.Errorf("can not found container %s", container)
+	}
+
+	if !pod.TransitionLock("stop") {
+		glog.Errorf("Pod %s is under other operation", pod.Id)
+		return fmt.Errorf("Pod %s is under other operation", pod.Id)
+	}
+	defer pod.TransitionUnlock("stop")
+
+	containerId := pod.PodStatus.Containers[idx].Id
+	glog.V(1).Infof("found container %s to stop", containerId)
+
+	return daemon.StopContainerWithinLock(pod, containerId)
+}
+
+func (daemon *Daemon) StopContainerWithinLock(pod *Pod, containerId string) error {
+	pod.Lock()
+
+	if pod.VM == nil {
+		pod.Unlock()
+		return fmt.Errorf("pod is not started yet")
+	}
+
+	err := pod.VM.KillContainer(containerId, syscall.SIGKILL)
 	if err != nil {
-		return -1, "", err
+		pod.Unlock()
+		return err
 	}
 
-	var qemuResponse *types.QemuResponse
-	if stopVm == "yes" {
-		daemon.podList[podId].Wg.Add(1)
-		shutdownPodEvent := &hypervisor.ShutdownCommand{Wait: true}
-		qemuPodEvent.(chan hypervisor.VmEvent) <- shutdownPodEvent
-		// wait for the qemu response
-		for {
-			qemuResponse = <-qemuStatus.(chan *types.QemuResponse)
-			glog.V(1).Infof("Got response: %d: %s", qemuResponse.Code, qemuResponse.Cause)
-			if qemuResponse.Code == types.E_VM_SHUTDOWN {
-				break
-			}
-		}
-		close(qemuStatus.(chan *types.QemuResponse))
-		// wait for goroutines exit
-		daemon.podList[podId].Wg.Wait()
-	} else {
-		stopPodEvent := &hypervisor.StopPodCommand{}
-		qemuPodEvent.(chan hypervisor.VmEvent) <- stopPodEvent
-		// wait for the qemu response
-		for {
-			qemuResponse = <-qemuStatus.(chan *types.QemuResponse)
-			glog.V(1).Infof("Got response: %d: %s", qemuResponse.Code, qemuResponse.Cause)
-			if qemuResponse.Code == types.E_POD_STOPPED || qemuResponse.Code == types.E_BAD_REQUEST || qemuResponse.Code == types.E_FAILED {
-				break
-			}
-		}
-	}
+	pod.Unlock()
 
-	// Delete the Vm info for POD
-	daemon.DeleteVmByPod(podId)
-
-	if qemuResponse.Code == types.E_VM_SHUTDOWN {
-		daemon.podList[podId].Vm = ""
-		daemon.RemoveVm(vmid)
-		daemon.DeleteQemuChan(vmid)
-	}
-	if qemuResponse.Code == types.E_POD_STOPPED {
-		daemon.podList[podId].Vm = ""
-		daemon.vmList[vmid].Status = types.S_VM_IDLE
-	}
-	daemon.podList[podId].Status = types.S_POD_FAILED
-	daemon.SetContainerStatus(podId, types.S_POD_FAILED)
-	return qemuResponse.Code, qemuResponse.Cause, nil
+	return nil
 }

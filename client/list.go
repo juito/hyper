@@ -2,17 +2,23 @@ package client
 
 import (
 	"fmt"
-	gflag "github.com/jessevdk/go-flags"
-	"hyper/engine"
-	"net/url"
 	"os"
 	"strings"
+	"text/tabwriter"
+
+	gflag "github.com/jessevdk/go-flags"
 )
 
 func (cli *HyperClient) HyperCmdList(args ...string) error {
-	var parser = gflag.NewParser(nil, gflag.Default)
-	parser.Usage = "list [pod|container]\n\nlist all pods or container information"
-	args, err := parser.Parse()
+	var opts struct {
+		Aux bool   `short:"x" long:"aux" default:"false" description:"show the auxiliary containers"`
+		Pod string `short:"p" long:"pod" value-name:"\"\"" description:"only list the specified pod"`
+		VM  string `short:"m" long:"vm" value-name:"\"\"" description:"only list resources on the specified vm"`
+	}
+
+	var parser = gflag.NewParser(&opts, gflag.Default|gflag.IgnoreUnknown)
+	parser.Usage = "list [OPTIONS] [pod|container|vm]\n\nlist all pods or container information"
+	args, err := parser.ParseArgs(args)
 	if err != nil {
 		if !strings.Contains(err.Error(), "Usage") {
 			return err
@@ -21,33 +27,20 @@ func (cli *HyperClient) HyperCmdList(args ...string) error {
 		}
 	}
 	var item string
-	if len(args) == 1 {
+	if len(args) == 0 {
 		item = "pod"
 	} else {
-		item = args[1]
+		item = args[0]
 	}
 
 	if item != "pod" && item != "vm" && item != "container" {
 		return fmt.Errorf("Error, the %s can not support %s list!", os.Args[0], item)
 	}
 
-	v := url.Values{}
-	v.Set("item", item)
-	body, _, err := readBody(cli.call("GET", "/list?"+v.Encode(), nil, nil))
+	remoteInfo, err := cli.client.List(item, opts.Pod, opts.VM, opts.Aux)
 	if err != nil {
 		return err
 	}
-	out := engine.NewOutput()
-	remoteInfo, err := out.AddEnv()
-	if err != nil {
-		return err
-	}
-
-	if _, err := out.Write(body); err != nil {
-		fmt.Printf("Error reading remote info: %s", err)
-		return err
-	}
-	out.Close()
 
 	var (
 		vmResponse        = []string{}
@@ -61,6 +54,7 @@ func (cli *HyperClient) HyperCmdList(args ...string) error {
 		return fmt.Errorf("Found an error while getting %s list: %s", item, remoteInfo.Get("Error"))
 	}
 
+	w := tabwriter.NewWriter(cli.out, 20, 1, 3, ' ', 0)
 	if item == "vm" {
 		vmResponse = remoteInfo.GetList("vmData")
 	}
@@ -73,31 +67,34 @@ func (cli *HyperClient) HyperCmdList(args ...string) error {
 
 	//fmt.Printf("Item is %s\n", item)
 	if item == "vm" {
-		fmt.Printf("%15s%20s\n", "VM name", "Status")
+		fmt.Fprintln(w, "VM name\tStatus")
 		for _, vm := range vmResponse {
 			fields := strings.Split(vm, ":")
-			fmt.Printf("%15s%20s\n", fields[0], fields[2])
+			fmt.Fprintf(w, "%s\t%s\n", fields[0], fields[2])
 		}
 	}
 
 	if item == "pod" {
-		fmt.Printf("%15s%30s%20s%10s\n", "POD ID", "POD Name", "VM name", "Status")
+		fmt.Fprintln(w, "POD ID\tPOD Name\tVM name\tStatus")
 		for _, p := range podResponse {
 			fields := strings.Split(p, ":")
-			var podName = fields[1]
-			if len(fields[1]) > 27 {
-				podName = fields[1][:27]
-			}
-			fmt.Printf("%15s%30s%20s%10s\n", fields[0], podName, fields[2], fields[3])
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fields[0], fields[1], fields[2], fields[3])
 		}
 	}
 
 	if item == "container" {
-		fmt.Printf("%-66s%15s%10s\n", "Container ID", "POD ID", "Status")
+		fmt.Fprintln(w, "Container ID\tName\tPOD ID\tStatus")
 		for _, c := range containerResponse {
 			fields := strings.Split(c, ":")
-			fmt.Printf("%-66s%15s%10s\n", fields[0], fields[1], fields[2])
+			name := fields[1]
+			if len(name) > 0 {
+				if name[0] == '/' {
+					name = name[1:]
+				}
+			}
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fields[0], name, fields[2], fields[3])
 		}
 	}
+	w.Flush()
 	return nil
 }

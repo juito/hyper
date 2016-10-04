@@ -1,191 +1,78 @@
 package client
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
-	"net/http"
-	"net/url"
 	"os"
 	"os/signal"
-	"strconv"
-	"strings"
 	"syscall"
 
-	"hyper/lib/term"
-	"hyper/pod"
-	"hyper/utils"
+	"github.com/hyperhq/hyperd/utils"
+	"github.com/hyperhq/runv/hypervisor/pod"
+	"github.com/hyperhq/runv/lib/term"
 
+	"github.com/docker/docker/pkg/jsonmessage"
+	"github.com/docker/docker/pkg/stdcopy"
+	"github.com/docker/docker/registry"
+	"github.com/docker/engine-api/types"
+	registrytypes "github.com/docker/engine-api/types/registry"
 	"gopkg.in/yaml.v2"
+	"net/http"
 )
 
-var (
-	ErrConnectionRefused = errors.New("Cannot connect to the Hyper daemon. Is 'hyperd' running on this host?")
-)
+type AuthRequest func(authConfig types.AuthConfig) (io.ReadCloser, string, int, error)
 
-func (cli *HyperClient) HTTPClient() *http.Client {
-	return &http.Client{Transport: cli.transport}
+func (cli *HyperClient) requestWithLogin(index *registrytypes.IndexInfo, op AuthRequest, opTag string) (io.ReadCloser, string, int, error) {
+
+	authConfig := registry.ResolveAuthConfig(cli.configFile.AuthConfigs, index)
+	body, ctype, statusCode, err := op(authConfig)
+	if statusCode == http.StatusUnauthorized {
+		fmt.Fprintf(cli.out, "\nPlease login prior to %s:\n", opTag)
+		if err = cli.HyperCmdLogin(registry.GetAuthConfigKey(index)); err != nil {
+			return nil, "", -1, err
+		}
+		authConfig = registry.ResolveAuthConfig(cli.configFile.AuthConfigs, index)
+		return op(authConfig)
+	}
+	return body, ctype, statusCode, err
 }
 
-func (cli *HyperClient) encodeData(data interface{}) (*bytes.Buffer, error) {
-	params := bytes.NewBuffer(nil)
-	if data != nil {
-		buf, err := json.Marshal(data)
-		if err != nil {
-			return nil, err
-		}
-		if _, err := params.Write(buf); err != nil {
-			return nil, err
-		}
-	}
-	return params, nil
-}
-
-func (cli *HyperClient) clientRequest(method, path string, in io.Reader, headers map[string][]string) (io.ReadCloser, string, int, error) {
-	expectedPayload := (method == "POST" || method == "PUT")
-	if expectedPayload && in == nil {
-		in = bytes.NewReader([]byte{})
-	}
-	req, err := http.NewRequest(method, fmt.Sprintf("/v%s%s", utils.VERSION, path), in)
-	if err != nil {
-		return nil, "", -1, err
-	}
-	req.Header.Set("User-Agent", "Hyper-Client/"+utils.VERSION)
-	req.URL.Host = cli.addr
-	req.URL.Scheme = cli.scheme
-
-	if headers != nil {
-		for k, v := range headers {
-			req.Header[k] = v
-		}
-	}
-
-	if expectedPayload && req.Header.Get("Content-Type") == "" {
-		req.Header.Set("Content-Type", "text/plain")
-	}
-
-	resp, err := cli.HTTPClient().Do(req)
-	statusCode := -1
-	if resp != nil {
-		statusCode = resp.StatusCode
-	}
-	if err != nil {
-		if strings.Contains(err.Error(), "connection refused") {
-			return nil, "", statusCode, ErrConnectionRefused
-		}
-
-		/*
-			if cli.tlsConfig == nil {
-				return nil, "", statusCode, fmt.Errorf("%v. Are you trying to connect to a TLS-enabled daemon without TLS?", err)
-			}
-		*/
-		return nil, "", statusCode, fmt.Errorf("An error occurred trying to connect: %v", err)
-	}
-
-	if statusCode < 200 || statusCode >= 400 {
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return nil, "", statusCode, err
-		}
-		if len(body) == 0 {
-			return nil, "", statusCode, fmt.Errorf("Error: request returned %s for API route and version %s, check if the server supports the requested API version", http.StatusText(statusCode), req.URL)
-		}
-		if len(bytes.TrimSpace(body)) > 150 {
-			return nil, "", statusCode, fmt.Errorf("Error from daemon's response")
-		}
-		return nil, "", statusCode, fmt.Errorf("%s", bytes.TrimSpace(body))
-	}
-
-	return resp.Body, resp.Header.Get("Content-Type"), statusCode, nil
-}
-
-func (cli *HyperClient) call(method, path string, data interface{}, headers map[string][]string) (io.ReadCloser, int, error) {
-	params, err := cli.encodeData(data)
-	if err != nil {
-		return nil, -1, err
-	}
-
-	if data != nil {
-		if headers == nil {
-			headers = make(map[string][]string)
-		}
-		headers["Content-Type"] = []string{"application/json"}
-	}
-
-	body, _, statusCode, err := cli.clientRequest(method, path, params, headers)
-	return body, statusCode, err
-}
-
-func (cli *HyperClient) stream(method, path string, in io.Reader, out io.Writer, headers map[string][]string) error {
-	return cli.streamHelper(method, path, true, in, out, nil, headers)
-}
-
-func (cli *HyperClient) streamHelper(method, path string, setRawTerminal bool, in io.Reader, stdout, stderr io.Writer, headers map[string][]string) error {
-	body, contentType, _, err := cli.clientRequest(method, path, in, headers)
-	if err != nil {
-		return err
-	}
-	return cli.streamBody(body, contentType, setRawTerminal, stdout, stderr)
-}
-
-func (cli *HyperClient) streamBody(body io.ReadCloser, contentType string, setRawTerminal bool, stdout, stderr io.Writer) error {
+func (cli *HyperClient) readStreamOutput(body io.ReadCloser, contentType string, setRawTerminal bool, stdout, stderr io.Writer) error {
 	defer body.Close()
 
 	if utils.MatchesContentType(contentType, "application/json") {
-		for {
-			buf := new(bytes.Buffer)
-			buf.ReadFrom(body)
-			str := buf.String()
-			fmt.Printf(str)
+		return jsonmessage.DisplayJSONMessagesStream(body, stdout, cli.outFd, cli.isTerminalOut, nil)
+	}
+	if stdout != nil || stderr != nil {
+		// When TTY is ON, use regular copy
+		var err error
+		if setRawTerminal {
+			_, err = io.Copy(stdout, body)
+		} else {
+			_, err = stdcopy.StdCopy(stdout, stderr, body)
 		}
-		return nil
+		return err
 	}
 	return nil
 }
 
-func readBody(stream io.ReadCloser, statusCode int, err error) ([]byte, int, error) {
-	if stream != nil {
-		defer stream.Close()
-	}
-	if err != nil {
-		return nil, statusCode, err
-	}
-	if stream == nil {
-		return nil, statusCode, err
-	}
-	body, err := ioutil.ReadAll(stream)
-	if err != nil {
-		return nil, -1, err
-	}
-	return body, statusCode, nil
-}
-
-func (cli *HyperClient) resizeTty(id, tag string) {
+func (cli *HyperClient) resizeTty(containerId, execId string) {
 	height, width := cli.getTtySize()
 	if height == 0 && width == 0 {
 		return
 	}
-	v := url.Values{}
-	v.Set("h", strconv.Itoa(height))
-	v.Set("w", strconv.Itoa(width))
-	v.Set("id", id)
-	v.Set("tag", tag)
-
-	if _, _, err := readBody(cli.call("POST", "/tty/resize?"+v.Encode(), nil, nil)); err != nil {
-		//fmt.Printf("Error resize: %s", err.Error())
-	}
+	cli.client.WinResize(containerId, execId, height, width)
 }
-func (cli *HyperClient) monitorTtySize(id, tag string) error {
-	cli.resizeTty(id, tag)
+
+func (cli *HyperClient) monitorTtySize(containerId, execId string) error {
+	//cli.resizeTty(id, tag)
 
 	sigchan := make(chan os.Signal, 1)
 	signal.Notify(sigchan, syscall.SIGWINCH)
 	go func() {
-		for _ = range sigchan {
-			cli.resizeTty(id, tag)
+		for range sigchan {
+			cli.resizeTty(containerId, execId)
 		}
 	}()
 	return nil
@@ -206,7 +93,7 @@ func (cli *HyperClient) getTtySize() (int, int) {
 }
 
 func (cli *HyperClient) GetTag() string {
-	return pod.RandStr(8, "alphanum")
+	return utils.RandStr(8, "alphanum")
 }
 
 func (cli *HyperClient) ConvertYamlToJson(yamlBody []byte) ([]byte, error) {

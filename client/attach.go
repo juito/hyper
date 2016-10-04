@@ -2,19 +2,17 @@ package client
 
 import (
 	"fmt"
-	"io"
-	"net/url"
 	"strings"
 
-	"hyper/lib/promise"
+	"github.com/hyperhq/runv/lib/term"
 
 	gflag "github.com/jessevdk/go-flags"
 )
 
 func (cli *HyperClient) HyperCmdAttach(args ...string) error {
 	var parser = gflag.NewParser(nil, gflag.Default)
-	parser.Usage = "attach CONTAINER\n\nattach to the tty of a specified container in a pod"
-	args, err := parser.Parse()
+	parser.Usage = "attach CONTAINER\n\nAttach to the tty of a specified container in a pod"
+	args, err := parser.ParseArgs(args)
 	if err != nil {
 		if !strings.Contains(err.Error(), "Usage") {
 			return err
@@ -22,76 +20,52 @@ func (cli *HyperClient) HyperCmdAttach(args ...string) error {
 			return nil
 		}
 	}
-	if len(args) == 1 {
+	if len(args) == 0 {
 		return fmt.Errorf("Can not accept the 'attach' command without Container ID!")
 	}
 	var (
-		podName     = args[1]
-		hostname    = ""
-		tag         = cli.GetTag()
-		containerId = podName
+		podId       = args[0]
+		containerId = args[0]
+		tty         bool
 	)
 
-	v := url.Values{}
-	if strings.Contains(podName, "pod-") {
-		hostname, err = cli.GetPodInfo(podName)
+	if strings.Contains(podId, "pod-") {
+		pod, err := cli.client.GetPodInfo(podId)
 		if err != nil {
 			return err
 		}
-		if hostname == "" {
-			return fmt.Errorf("The pod(%s) does not exist, please create it before exec!", podName)
+
+		if len(pod.Spec.Containers) == 0 {
+			return fmt.Errorf("failed to get container from %s", podId)
 		}
-		containerId, err = cli.GetContainerByPod(podName)
-		if err != nil {
-			return err
-		}
-		v.Set("type", "container")
-		v.Set("value", containerId)
+
+		c := pod.Spec.Containers[0]
+
+		containerId = c.ContainerID
+		tty = c.Tty
 	} else {
-		v.Set("type", "container")
-		v.Set("value", containerId)
-	}
-	v.Set("tag", tag)
-
-	var (
-		hijacked = make(chan io.Closer)
-		errCh    chan error
-	)
-	// Block the return until the chan gets closed
-	defer func() {
-		fmt.Printf("End of CmdExec(), Waiting for hijack to finish.\n")
-		if _, ok := <-hijacked; ok {
-			fmt.Printf("Hijack did not finish (chan still open)\n")
-		}
-	}()
-
-	errCh = promise.Go(func() error {
-		return cli.hijack("POST", "/attach?"+v.Encode(), true, cli.in, cli.out, cli.out, hijacked, nil, hostname)
-	})
-
-	if err := cli.monitorTtySize(podName, tag); err != nil {
-		fmt.Printf("Monitor tty size fail for %s!\n", podName)
-	}
-
-	// Acknowledge the hijack before starting
-	select {
-	case closer := <-hijacked:
-		// Make sure that hijack gets closed when returning. (result
-		// in closing hijack chan and freeing server's goroutines.
-		if closer != nil {
-			defer closer.Close()
-		}
-	case err := <-errCh:
+		c, err := cli.client.GetContainerInfo(containerId)
 		if err != nil {
-			fmt.Printf("Error hijack: %s", err.Error())
 			return err
 		}
+
+		podId = c.PodID
+		containerId = c.Container.ContainerID
+		tty = c.Container.Tty
 	}
 
-	if err := <-errCh; err != nil {
-		fmt.Printf("Error hijack: %s", err.Error())
+	if tty {
+		oldState, err := term.SetRawTerminal(cli.inFd)
+		if err != nil {
+			return err
+		}
+		defer term.RestoreTerminal(cli.inFd, oldState)
+		cli.monitorTtySize(containerId, "")
+	}
+
+	if err := cli.client.Attach(containerId, tty, cli.in, cli.out, cli.err); err != nil {
 		return err
 	}
-	fmt.Printf("Successfully attached to pod(%s)\n", podName)
-	return nil
+
+	return cli.client.GetExitCode(containerId, "")
 }

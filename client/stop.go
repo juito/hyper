@@ -2,11 +2,9 @@ package client
 
 import (
 	"fmt"
-	"net/url"
 	"strings"
 
-	"hyper/engine"
-	"hyper/types"
+	"github.com/hyperhq/runv/hypervisor/types"
 
 	gflag "github.com/jessevdk/go-flags"
 )
@@ -14,11 +12,12 @@ import (
 func (cli *HyperClient) HyperCmdStop(args ...string) error {
 
 	var opts struct {
-		//		Novm        bool     `long:"onlypod" default:"false" value-name:"false" description:"Stop a Pod, but left the VM running"`
+		Container bool `short:"c" long:"container" default:"false" default-mask:"-" description:"stop container"`
+		Novm      bool `long:"onlypod" default:"false" description:"Stop a Pod, but left the VM running"`
 	}
 	var parser = gflag.NewParser(&opts, gflag.Default)
-	parser.Usage = "stop POD_ID\n\nstop a running pod"
-	args, err := parser.Parse()
+	parser.Usage = "stop [OPTIONS] CONTAINER_ID|POD_ID\n\nStop running container or pod"
+	args, err := parser.ParseArgs(args)
 	if err != nil {
 		if !strings.Contains(err.Error(), "Usage") {
 			return err
@@ -26,53 +25,34 @@ func (cli *HyperClient) HyperCmdStop(args ...string) error {
 			return nil
 		}
 	}
-	if len(args) == 1 {
+	if len(args) == 0 {
 		return fmt.Errorf("\"stop\" requires a minimum of 1 argument, please provide POD ID.\n")
 	}
 
-	podID := args[1]
 	stopVm := "yes"
-	if false {
+	if opts.Novm {
 		stopVm = "no"
 	}
-	code, cause, err := cli.StopPod(podID, stopVm)
-	if err != nil {
-		return err
-	}
-	if code != types.E_POD_STOPPED && code != types.E_VM_SHUTDOWN {
-		return fmt.Errorf("Error code is %d, cause is %s", code, cause)
-	}
-	fmt.Printf("Successfully shutdown the POD: %s!\n", podID)
-	return nil
-}
 
-func (cli *HyperClient) StopPod(podId, stopVm string) (int, string, error) {
-	v := url.Values{}
-	v.Set("podId", podId)
-	v.Set("stopVm", stopVm)
-	body, _, err := readBody(cli.call("POST", "/pod/stop?"+v.Encode(), nil, nil))
-	if err != nil {
-		if strings.Contains(err.Error(), "leveldb: not found") {
-			return -1, "", fmt.Errorf("Can not find that POD ID to stop, please check your POD ID!")
+	for i := range args {
+		if opts.Container {
+			err = cli.client.StopContainer(args[i])
+			if err != nil {
+				fmt.Fprintf(cli.err, "fail to stop container %s: %v", args[i], err)
+			}
+		} else {
+			code, cause, err := cli.client.StopPod(args[i], stopVm)
+			if err != nil {
+				fmt.Fprintf(cli.err, "fail to stop pod %s: %v", args[i], err)
+				continue
+			}
+			if code != types.E_POD_STOPPED && code != types.E_VM_SHUTDOWN {
+				fmt.Fprintf(cli.err, "Error code is %d, cause is %s", code, cause)
+				continue
+			}
+			fmt.Printf("Successfully shutdown the POD: %s!\n", args[i])
 		}
-		return -1, "", err
-	}
-	out := engine.NewOutput()
-	remoteInfo, err := out.AddEnv()
-	if err != nil {
-		return -1, "", err
 	}
 
-	if _, err := out.Write(body); err != nil {
-		fmt.Printf("Error reading remote info: %s", err)
-		return -1, "", err
-	}
-	out.Close()
-	// This 'ID' stands for pod ID
-	// This 'Code' should be E_SHUTDOWN
-	// THis 'Cause' ..
-	if remoteInfo.Exists("ID") {
-		// TODO ...
-	}
-	return remoteInfo.GetInt("Code"), remoteInfo.Get("Cause"), nil
+	return nil
 }

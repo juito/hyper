@@ -1,3 +1,5 @@
+// +build linux
+
 package aufs
 
 import (
@@ -7,13 +9,11 @@ import (
 	"os"
 	"os/exec"
 	"path"
-	"path/filepath"
-	"strconv"
 	"sync"
 	"syscall"
 
-	"hyper/lib/glog"
-	"hyper/utils"
+	"github.com/golang/glog"
+	"github.com/hyperhq/hyperd/utils"
 )
 
 /*
@@ -59,50 +59,6 @@ func MountContainerToSharedDir(containerId, rootDir, sharedDir, mountLabel strin
 	}
 
 	return mountPoint, nil
-}
-
-func AttachFiles(containerId, fromFile, toDir, rootDir, perm, uid, gid string) error {
-	if containerId == "" {
-		return fmt.Errorf("Please make sure the arguments are not NULL!\n")
-	}
-	permInt := utils.ConvertPermStrToInt(perm)
-	// It just need the block device without copying any files
-	// FIXME whether we need to return an error if the target directory is null
-	if toDir == "" {
-		return nil
-	}
-	// Make a new file with the given premission and wirte the source file content in it
-	if _, err := os.Stat(fromFile); err != nil && os.IsNotExist(err) {
-		return err
-	}
-	buf, err := ioutil.ReadFile(fromFile)
-	if err != nil {
-		return err
-	}
-	targetDir := path.Join(rootDir, containerId, "rootfs", toDir)
-	_, err = os.Stat(targetDir)
-	targetFile := targetDir
-	if err != nil && os.IsNotExist(err) {
-		// we need to create a target directory with given premission
-		if err := os.MkdirAll(targetDir, os.FileMode(permInt)); err != nil {
-			return err
-		}
-		targetFile = targetDir + "/" + filepath.Base(fromFile)
-	} else {
-		targetFile = targetDir + "/" + filepath.Base(fromFile)
-	}
-	err = ioutil.WriteFile(targetFile, buf, os.FileMode(permInt))
-	if err != nil {
-		return err
-	}
-
-	user_id, _ := strconv.Atoi(uid)
-	group_id, _ := strconv.Atoi(gid)
-	if err = syscall.Chown(targetFile, user_id, group_id); err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func getParentDiffPaths(id, rootPath string) ([]string, error) {
@@ -218,7 +174,7 @@ func aufsUnmount(target string) error {
 	cmdString := fmt.Sprintf("auplink %s flush", target)
 	cmd := exec.Command("/bin/sh", "-c", cmdString)
 	if err := cmd.Run(); err != nil {
-		glog.Warningf("Couldn't run auplink command : %s\n", err.Error())
+		glog.Warningf("Couldn't run auplink command : %s\n%s\n", err.Error())
 	}
 	if err := syscall.Unmount(target, 0); err != nil {
 		return err

@@ -2,10 +2,9 @@
 # Process this file with autoconf to produce a configure script.
 
 AC_PREREQ([2.69])
-AC_INIT([hyper], [0.2], [hyper.sh])
+AC_INIT([hyper], [0.6.2], [dev@hyper.sh])
 AM_INIT_AUTOMAKE([-Wall -Werror foreign subdir-objects])
-AC_CONFIG_SRCDIR([hypervisor/xen/hyperxl.c])
-AC_CONFIG_HEADERS([hypervisor/xen/config.h])
+AM_EXTRA_RECURSIVE_TARGETS([pkg])
 
 # Checks for programs.
 AC_PROG_CC
@@ -18,11 +17,38 @@ if test "x$has_go" != "xyes" ; then
     AC_MSG_ERROR(Unable to find go binary in PATH)
 fi
 
-AC_CHECK_PROG([has_godep], [godep], [yes], [no])
-if test "x$has_godep" != "xyes" ; then
-    AC_MSG_ERROR(Unable to find godep binary in PATH)
-fi
+# Platform specific setup
+AC_CANONICAL_HOST
 
+case $host_os in
+	linux*) AM_CONDITIONAL([ON_LINUX], [ true  ]) ;;
+	*)      AM_CONDITIONAL([ON_LINUX], [ false ]) ;;
+esac
+
+# Check for which host we are on and setup a few things
+# specifically based on the host
+AC_CHECK_PROG([has_virtualbox], [vboxmanage], [yes], [no])
+case $host_os in
+	darwin* )
+		# Do something specific for mac
+		AM_CONDITIONAL([ON_DARWIN], [ true ])
+		if test "x$has_virtualbox" != "xyes" ; then
+			AC_MSG_ERROR(Unable to find vboxmanage binary in PATH)
+		fi
+		;;
+	linux*)
+		# Do something specific for linux
+		AM_CONDITIONAL([ON_DARWIN], [ false ])
+		AC_CHECK_HEADER([libdevmapper.h],
+						[],
+						[AC_MSG_ERROR([Could not find or include libdevmapper.h])],
+						[])
+		;;
+	*)
+		#Default Case
+		AC_MSG_ERROR([Your platform is not currently supported])
+		;;
+esac
 # Checks for libraries.
 
 # Checks for header files.
@@ -37,6 +63,19 @@ AC_TYPE_UINT8_T
 # Checks for library functions.
 AC_FUNC_MALLOC
 AC_CHECK_FUNCS([strdup])
+
+LIBVIRT_REQUIRED="1.2.2"
+
+AC_ARG_WITH([libvirt],
+            [AS_HELP_STRING([--without-libvirt],
+                            [run hyperd with libvirt])],
+            [with_libvirt=no],[with_libvirt=yes])
+
+if test "$with_libvirt" = yes; then
+	PKG_CHECK_MODULES([libvirt], [libvirt >= $LIBVIRT_REQUIRED], [], [with_libvirt=no])
+fi
+
+AM_CONDITIONAL([WITH_LIBVIRT], [test "x$with_libvirt" == "xyes"])
 
 AC_ARG_WITH([xen],
             [AS_HELP_STRING([--without-xen],
@@ -57,17 +96,25 @@ fi
 
 AM_CONDITIONAL([WITH_XEN], [test "x$with_xen" == "xyes"])
 
-AC_CONFIG_FILES([Makefile
-                 hypervisor/Makefile
-                 hypervisor/xen/Makefile])
+AC_CONFIG_FILES([Makefile])
+case $build_os in
+	darwin*)
+		AC_CONFIG_FILES([mac_installer/Makefile])
+		;;
+esac
+
 AC_OUTPUT
 
 AC_MSG_RESULT([
 	${PACKAGE}  ${VERSION}
+	build OS:   ${build_os}
 	prefix:	    ${prefix}
 
 	has go:     ${has_go}
-	has godep:  ${has_go}
 
 	with xen:   ${with_xen}
+
+	with libvirt: ${with_libvirt}
+
+	has virtualbox: ${has_virtualbox}
 ])
